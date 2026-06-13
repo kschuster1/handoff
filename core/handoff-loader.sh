@@ -29,6 +29,10 @@ AUTOSAVE="$HDIR/AUTOSAVE.md"
 emit() {
   local body; body=$(cat)
   if [ "$HARNESS" = "gemini" ]; then
+    if ! command -v jq >/dev/null 2>&1; then
+      printf 'handoff-loader: jq is required for gemini mode\n' >&2
+      return 0   # emit nothing → Gemini gets no malformed context
+    fi
     jq -n --arg c "$body" \
       '{hookSpecificOutput:{hookEventName:"BeforeAgent",additionalContext:$c}}'
   else

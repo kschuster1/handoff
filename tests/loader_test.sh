@@ -47,4 +47,13 @@ touch -t "$ts" "$D3/.handoff/HANDOFF.md"
 out=$(printf '{"cwd":"%s"}' "$D3" | bash "$LOADER" claude)
 assert_contains "$out" "STALE" "old handoff → STALE warning"
 
+# ---------- gemini full inject is valid JSON carrying the body ----------
+DG=$(mktemp -d); mkfix "$DG" "gem task" "resume gem" '## Task\nline with "quotes" and\nnewlines'
+out=$(GEMINI_CWD="$DG" bash "$LOADER" gemini </dev/null)
+# must be parseable JSON
+echo "$out" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "gemini full: output is valid JSON"
+ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
+assert_contains "$ctx" "HANDOFF.md (auto-loaded" "gemini full: body inside additionalContext"
+assert_contains "$ctx" 'with "quotes"' "gemini full: quotes preserved through JSON"
+
 finish
