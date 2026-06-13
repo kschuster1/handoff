@@ -223,10 +223,15 @@ Tests are dependency-light bash (require `jq`):
 bash tests/run.sh
 ```
 
-The `commands/handoff.md` and `adapters/codex/prompts/handoff.md` entries are git symlinks to
-`core/handoff.md` (single source of truth). They resolve on macOS/Linux; a Windows checkout
-without symlink support would need them copied — `install.sh` copies rather than symlinks, so
-installed setups are unaffected.
+`core/handoff.md` is the single source of truth for the command body. Claude Code and Codex
+loaders don't follow symlinks in their plugin/prompt caches, so `commands/handoff.md` and
+`adapters/codex/prompts/handoff.md` are **copies**. `tests/cmd_sync_test.sh` fails if a copy
+drifts — after editing `core/handoff.md`, re-copy it over both:
+
+```
+cp core/handoff.md commands/handoff.md
+cp core/handoff.md adapters/codex/prompts/handoff.md
+```
 
 ## License
 

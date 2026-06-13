@@ -27,5 +27,5 @@ assert_contains "$hj" "claude" "hooks.json passes claude arg"
 assert_contains "$hj" "CLAUDE_PLUGIN_ROOT" "hooks.json resolves via plugin root"
 
 # command is the shared body (symlink resolves to same content)
-assert_contains "$(cat "$ROOT/commands/handoff.md")" ".handoff/HANDOFF.md" "command symlink resolves to shared body"
+assert_contains "$(cat "$ROOT/commands/handoff.md")" ".handoff/HANDOFF.md" "command body present (real file)"
 finish
