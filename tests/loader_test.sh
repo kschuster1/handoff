@@ -56,4 +56,26 @@ ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
 assert_contains "$ctx" "HANDOFF.md (auto-loaded" "gemini full: body inside additionalContext"
 assert_contains "$ctx" 'with "quotes"' "gemini full: quotes preserved through JSON"
 
+# ---------- AUTOSAVE precedence ----------
+mkauto() { # dir branch dirty commits
+  mkdir -p "$1/.handoff"
+  printf -- '---\nbranch: %s\ndirty: %s\ncommits: %s\n---\n\n(git snapshot)\n' \
+    "$2" "$3" "$4" > "$1/.handoff/AUTOSAVE.md"
+}
+
+# autosave only → pointer line
+DA=$(mktemp -d); mkauto "$DA" "feature/x" "3" "2"
+out=$(printf '{"cwd":"%s"}' "$DA" | bash "$LOADER" claude)
+assert_contains "$out" "auto-snapshot" "autosave-only → snapshot pointer"
+assert_contains "$out" "feature/x" "autosave pointer names branch"
+assert_contains "$out" ".handoff/AUTOSAVE.md" "autosave pointer names file"
+assert_not_contains "$out" "(git snapshot)" "autosave must NOT inject file body"
+
+# both present → HANDOFF wins
+DB=$(mktemp -d); mkfix "$DB" "manual" "resume manual" "## Task\nmanual body"
+mkauto "$DB" "feature/y" "1" "0"
+out=$(printf '{"cwd":"%s"}' "$DB" | bash "$LOADER" claude)
+assert_contains "$out" "manual body" "both present → manual handoff wins"
+assert_not_contains "$out" "auto-snapshot" "both present → no autosave pointer"
+
 finish

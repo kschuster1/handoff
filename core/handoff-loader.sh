@@ -58,6 +58,29 @@ Do not skip. Do not paraphrase. Emit verbatim, once, then continue.
 EOF
 }
 
+autosave_body() {
+  local fm branch dirty commits rel mtime now
+  fm=$(awk '/^---$/{c++; next} c==1{print} c>=2{exit}' "$AUTOSAVE")
+  branch=$(printf '%s\n' "$fm"  | grep -E '^branch:'  | head -1 | sed 's/^branch: *//')
+  dirty=$(printf '%s\n' "$fm"   | grep -E '^dirty:'   | head -1 | sed 's/^dirty: *//')
+  commits=$(printf '%s\n' "$fm" | grep -E '^commits:' | head -1 | sed 's/^commits: *//')
+  now=$(date +%s)
+  mtime=$(stat -c %Y "$AUTOSAVE" 2>/dev/null || stat -f %m "$AUTOSAVE" 2>/dev/null || echo "$now")
+  rel="$(( (now-mtime)/60 ))m ago"
+  cat <<EOF
+═══ Auto-snapshot present (no manual handoff) ═══
+⚠ auto-snapshot: ${branch:-?}, ${dirty:-?} files dirty, ${commits:-?} commits — updated ${rel}
+This is a mechanical git snapshot, not a written handoff.
+Action: read .handoff/AUTOSAVE.md ONLY if resuming prior work. Otherwise ignore.
+═══════════════════════════════════════════════
+
+[handoff-loader-instruction]
+On your VERY FIRST response, emit this line verbatim at the top, then continue:
+
+    🤝 Auto-snapshot available — read .handoff/AUTOSAVE.md if resuming
+EOF
+}
+
 resume_flow_instruction() { # confirm_line  resume_display
   cat <<EOF
 
@@ -89,7 +112,8 @@ EOF
 
 build_body() {
   if [ ! -f "$HANDOFF" ]; then
-    no_handoff_body; return
+    if [ -f "$AUTOSAVE" ]; then autosave_body; else no_handoff_body; fi
+    return
   fi
 
   # frontmatter (between first two `---` lines)
