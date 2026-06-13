@@ -14,7 +14,8 @@ HDIR="$CWD/.handoff"
 # don't compete with a real handoff
 if [ -f "$HDIR/HANDOFF.md" ]; then exit 0; fi
 
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || branch=""
+[ -n "$branch" ] || branch="?"
 dirty=$(git status --short 2>/dev/null | wc -l | tr -d ' ')
 
 # commits ahead of upstream (0 if no upstream)
@@ -39,11 +40,11 @@ mkdir -p "$HDIR"
   printf -- '---\n\n'
   printf '# Auto-snapshot (mechanical — no narrative)\n\n'
   printf 'Recent commits:\n```\n'
-  git log --oneline -5 2>/dev/null
+  git log --oneline -5 2>/dev/null || true
   printf '```\n\nWorking tree (diff --stat, capped):\n```\n'
-  git diff --stat 2>/dev/null | head -20
+  git diff --stat 2>/dev/null | head -20 || true
   printf '```\n\nUntracked/changed files:\n```\n'
-  git status --short 2>/dev/null | head -20
+  git status --short 2>/dev/null | head -20 || true
   printf '```\n'
 } > "$HDIR/AUTOSAVE.md"
 

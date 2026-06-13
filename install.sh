@@ -24,17 +24,45 @@ want() { # harness name → 0 if should install
   printf '%s' "$ONLY" | grep -qw "$1"
 }
 
-# resolve {{HANDOFF_ROOT}} in a template file → stdout
-render() { sed "s#{{HANDOFF_ROOT}}#${ROOT}#g" "$1"; }
+# resolve {{HANDOFF_ROOT}} in a template file → stdout (literal replace; path-char safe)
+render() {
+  awk -v root="$ROOT" '
+    { s="{{HANDOFF_ROOT}}";
+      while ((p=index($0,s))>0) { $0=substr($0,1,p-1) root substr($0,p+length(s)) }
+      print }' "$1"
+}
 
 log() { printf '  %s\n' "$1"; }
+
+# Install a hook template into a (possibly pre-existing) hooks.json WITHOUT clobbering
+# the user's other hooks. Merges our single event-entry in; idempotent; backs up.
+install_hook() { # template_path dest_path
+  local tmpl="$1" dest="$2" rendered ev
+  rendered=$(render "$tmpl")
+  ev=$(printf '%s' "$rendered" | jq -r 'keys[0]')
+  if [ -f "$dest" ] && jq -e . "$dest" >/dev/null 2>&1; then
+    cp "$dest" "$dest.bak"
+    printf '%s' "$rendered" | jq --arg ev "$ev" --slurpfile existing "$dest" '
+      . as $ours
+      | $existing[0]
+      | .[$ev] = (
+          (((.[$ev]) // [])
+            | map(select(((.hooks // []) | map(.command) | join(" ")) | contains("handoff-loader.sh") | not)))
+          + $ours[$ev])
+    ' > "$dest.tmp" && mv "$dest.tmp" "$dest"
+    log "merged $ev hook into existing $(basename "$dest") (backup: $(basename "$dest").bak)"
+  else
+    printf '%s\n' "$rendered" > "$dest"
+    log "wrote $(basename "$dest")"
+  fi
+}
 
 # ── Codex ────────────────────────────────────────────────────
 if want codex && [ -d "$HOME_DIR/.codex" ]; then
   echo "Codex detected → $HOME_DIR/.codex"
   mkdir -p "$HOME_DIR/.codex/prompts"
   cp "$ROOT/core/handoff.md" "$HOME_DIR/.codex/prompts/handoff.md"
-  render "$ROOT/adapters/codex/hooks.json" > "$HOME_DIR/.codex/hooks.json"
+  install_hook "$ROOT/adapters/codex/hooks.json" "$HOME_DIR/.codex/hooks.json"
   log "prompt + SessionStart hook installed"
 fi
 
@@ -43,7 +71,7 @@ if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
   echo "Gemini detected → $HOME_DIR/.gemini"
   mkdir -p "$HOME_DIR/.gemini/commands"
   render "$ROOT/adapters/gemini/commands/handoff.toml" > "$HOME_DIR/.gemini/commands/handoff.toml"
-  render "$ROOT/adapters/gemini/hooks.json" > "$HOME_DIR/.gemini/hooks.json"
+  install_hook "$ROOT/adapters/gemini/hooks.json" "$HOME_DIR/.gemini/hooks.json"
   log "command + BeforeAgent hook installed"
 fi
 

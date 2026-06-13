@@ -34,4 +34,15 @@ mkdir -p "$R3/.handoff"; echo "MANUAL" > "$R3/.handoff/HANDOFF.md"
 bash "$SNAP" "$R3"
 assert_eq "$([ -f "$R3/.handoff/AUTOSAVE.md" ] && echo yes || echo no)" "no" "manual handoff present → snapshot skipped"
 
+# commitless repo (git init + dirty, no commit yet) must not crash; AUTOSAVE well-formed
+R4=$(mktemp -d)
+( cd "$R4" && git init -q && git config user.email t@t.t && git config user.name t && echo x > a.txt ) >/dev/null
+bash "$SNAP" "$R4"; rc=$?
+assert_eq "$rc" "0" "commitless dirty repo → snapshot exits 0 (no set -e crash)"
+b=$(cat "$R4/.handoff/AUTOSAVE.md" 2>/dev/null || echo "")
+assert_contains "$b" "branch:" "commitless snapshot still has frontmatter"
+# fenced code blocks balanced (even number of ``` fences)
+fences=$(grep -c '```' "$R4/.handoff/AUTOSAVE.md" 2>/dev/null || echo 0)
+assert_eq "$((fences % 2))" "0" "commitless snapshot has balanced code fences (not truncated)"
+
 finish

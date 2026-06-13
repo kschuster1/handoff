@@ -87,4 +87,11 @@ out=$(printf '{"cwd":"%s"}' "$DB" | bash "$LOADER" claude)
 assert_contains "$out" "manual body" "both present → manual handoff wins"
 assert_not_contains "$out" "auto-snapshot" "both present → no autosave pointer"
 
+# archive isolation: archive-*.md is NOT loaded as a handoff (spec §7)
+DC=$(mktemp -d); mkdir -p "$DC/.handoff"
+printf -- '---\nsummary: archived\nresume: r\n---\n\narchived body\n' > "$DC/.handoff/archive-2026-01-01-120000.md"
+out=$(printf '{"cwd":"%s"}' "$DC" | bash "$LOADER" claude)
+assert_contains "$out" "No handoff for this project" "archive-only dir → no-handoff (archives ignored)"
+assert_not_contains "$out" "archived body" "archive body never injected"
+
 finish
