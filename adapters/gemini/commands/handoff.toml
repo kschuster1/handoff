@@ -1,0 +1,7 @@
+description = "Manage .handoff/HANDOFF.md — write/update (default), clear, status, list, help"
+
+prompt = """
+@{{{HANDOFF_ROOT}}/core/handoff.md}
+
+Subcommand argument: {{args}}
+"""
