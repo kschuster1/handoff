@@ -1,5 +1,9 @@
 {
   "name": "claude-toolkit",
+  "owner": {
+    "name": "Keith Schuster",
+    "email": "keithschuster@gmail.com"
+  },
   "plugins": [
     {
       "name": "handoff",

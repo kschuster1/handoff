@@ -13,6 +13,9 @@ assert_eq "$([ -f "$ROOT/marketplace.json" ] && echo yes || echo no)" "no" "no s
 mp=$(cat "$ROOT/.claude-plugin/marketplace.json")
 echo "$mp" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "marketplace.json is valid JSON"
 assert_contains "$mp" "handoff" "marketplace lists handoff"
+# Claude Code schema requires an owner OBJECT (not string)
+assert_json_field "$mp" '.owner | type' "object" "marketplace owner is an object (CC schema)"
+assert_json_field "$mp" '.plugins[0].source' "./" "plugin source points at repo root"
 
 # hooks.json: SessionStart → loader with claude arg, uses plugin root var
 hj=$(cat "$ROOT/hooks/hooks.json")
