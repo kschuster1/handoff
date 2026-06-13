@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"${CLAUDE_PLUGIN_ROOT}/core/handoff-loader.sh\" claude",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}

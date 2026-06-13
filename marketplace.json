@@ -1,0 +1,10 @@
+{
+  "name": "claude-toolkit",
+  "plugins": [
+    {
+      "name": "handoff",
+      "source": "./",
+      "description": "Cross-harness context handoff (Claude Code, Codex, Gemini)."
+    }
+  ]
+}
