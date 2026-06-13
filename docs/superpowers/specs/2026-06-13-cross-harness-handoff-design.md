@@ -129,7 +129,37 @@ preferred where available.
 - README documents the equivalent manual steps per harness for users who prefer not to run
   the script or are on an unsupported layout.
 
-### 6. `tests/loader_test.sh` — the verifiable surface
+### 6. `core/handoff-snapshot.sh` — mechanical auto-snapshot (opt-in safety net)
+
+Covers the "I forgot to run `/handoff`" gap without a model turn. A shell-only script wired to
+a pre-exit / pre-compact event per harness (Claude Code `PreCompact` + `Stop`, Codex
+`PreCompact` / `Stop`, Gemini `AfterAgent`). It dumps git ground-truth — no model involved, so
+it is always factually accurate but has no Task/Decisions/Next narrative.
+
+**Context-safety is the governing constraint** (it must not clobber the next window):
+
+- **Size-capped at write time.** Output = header (branch, N commits ahead of upstream, N files
+  dirty) + `git log --oneline -5` + `git diff --stat | head -20` + truncation marker. Target
+  < 1KB on disk.
+- **Pointer-only at load time, always.** Written to a distinct file `.handoff/AUTOSAVE.md`. The
+  loader never full-injects it — it emits a single line
+  (`⚠ auto-snapshot: <branch>, N files dirty, M commits — read .handoff/AUTOSAVE.md if resuming`).
+  The model reads the file on demand only if it is resuming. Roughly one line of context cost.
+- **Never clobbers a manual handoff.** Distinct filename; precedence handled in the loader.
+- **Opt-in.** Off by default; enabled per harness by the installer (or manual wiring). Trigger
+  is gated to a "significant run" — only writes when there is something to capture (dirty tree
+  or commits ahead of upstream), so a no-op session leaves no snapshot.
+
+**Loader precedence (added to §1):**
+1. `.handoff/HANDOFF.md` exists → existing full/pointer/stale logic; AUTOSAVE ignored.
+2. else `.handoff/AUTOSAVE.md` exists → pointer-only line, never full inject.
+3. else → no-handoff confirmation line.
+
+Not in scope here: a model-authored auto-handoff at end of run (Claude Code `Stop` hook with
+`decision:block` re-prompting the model to run the full write flow). It is Claude-Code-specific,
+intrusive, and needs significance + loop-guard gating. Deferred — see Out of scope.
+
+### 7. `tests/loader_test.sh` — the verifiable surface
 
 The loader is the only component testable without the harnesses installed. The test drives it
 with synthetic inputs and asserts behaviour:
@@ -141,6 +171,8 @@ with synthetic inputs and asserts behaviour:
 - **output wrapping:** `gemini` output is valid JSON with `hookSpecificOutput.additionalContext`;
   `claude`/`codex` output is plain text.
 - **archive isolation:** `archive-*.md` files are ignored.
+- **AUTOSAVE precedence:** with both files present, `HANDOFF.md` wins; with only `AUTOSAVE.md`,
+  output is a single pointer line (never full inject); snapshot script output stays < 1KB.
 
 ## Data flow
 
@@ -150,6 +182,9 @@ WRITE:  /handoff (any harness) → core/handoff.md flow → git-verified draft
 RESUME: session start (other harness) → hook runs handoff-loader.sh <harness>
         → reads .handoff/HANDOFF.md → injects (plain stdout | JSON additionalContext)
         → model emits confirmation + resume question
+AUTO:   pre-compact / pre-exit event → handoff-snapshot.sh (shell only, no model)
+        → if dirty tree or commits-ahead → writes size-capped .handoff/AUTOSAVE.md
+        → next session: loader emits one pointer line (never full inject)
 ```
 
 ## What is preserved from `claude-handoff`
@@ -162,6 +197,10 @@ default on clear; token budget (<600 target, 2000 hard cap → forces pointer mo
 ## Out of scope (YAGNI)
 
 - Copilot CLI integration.
+- Model-authored auto-handoff at end of run (Claude Code `Stop` hook `decision:block`
+  re-prompting the full write flow). Deferred: Claude-Code-only, intrusive, needs significance
+  + loop-guard gating. The mechanical AUTOSAVE snapshot (§6) covers the "forgot to run
+  `/handoff`" gap portably and without context bloat.
 - Auto-detecting harness from inside the loader (the wiring passes it explicitly — simpler,
   deterministic).
 - Cross-machine sync mechanics beyond the README recipes already documented.
