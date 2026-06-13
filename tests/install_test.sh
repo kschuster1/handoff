@@ -30,17 +30,19 @@ assert_eq "$([ -d "$FH/.claude/plugins" ] && echo yes || echo no)" "no" "absent 
 HANDOFF_FAKE_HOME="$FH" bash "$INSTALL" --yes >/dev/null 2>&1
 assert_eq "$?" "0" "second install run is idempotent (exit 0)"
 
-# idempotency: our SessionStart hook entry appears exactly once after two runs
-n=$(jq '[.SessionStart[].hooks[].command | select(contains("handoff-loader.sh"))] | length' "$FH/.codex/hooks.json")
+# idempotency: our SessionStart hook entry appears exactly once after two runs (under .hooks)
+n=$(jq '[.hooks.SessionStart[].hooks[].command | select(contains("handoff-loader.sh"))] | length' "$FH/.codex/hooks.json")
 assert_eq "$n" "1" "codex: handoff hook present exactly once after 2 runs (no dupes)"
 
 # non-destructive merge: a pre-existing unrelated hook survives installation
 FH2=$(mktemp -d); mkdir -p "$FH2/.codex"
-printf '{"PreToolUse":[{"hooks":[{"type":"command","command":"my-own-guard"}]}]}' > "$FH2/.codex/hooks.json"
+printf '{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"my-own-guard"}]}]}}' > "$FH2/.codex/hooks.json"
 HANDOFF_FAKE_HOME="$FH2" bash "$INSTALL" --yes --harness codex >/dev/null 2>&1
 merged=$(cat "$FH2/.codex/hooks.json")
 assert_contains "$merged" "my-own-guard" "merge preserves user's pre-existing hook"
+assert_json_field "$merged" '.hooks.PreToolUse[0].hooks[0].command' "my-own-guard" "user's PreToolUse intact under .hooks"
 assert_contains "$merged" "handoff-loader.sh" "merge adds handoff hook"
+assert_json_field "$merged" '.hooks.SessionStart[0].hooks[0].command | contains("handoff-loader.sh")' "true" "handoff hook landed under .hooks.SessionStart"
 assert_eq "$([ -f "$FH2/.codex/hooks.json.bak" ] && echo yes || echo no)" "yes" "pre-existing hooks.json backed up"
 
 # gemini: merge into a populated settings.json must preserve unrelated settings

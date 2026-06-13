@@ -17,10 +17,11 @@ assert_contains "$mp" "handoff" "marketplace lists handoff"
 assert_json_field "$mp" '.owner | type' "object" "marketplace owner is an object (CC schema)"
 assert_json_field "$mp" '.plugins[0].source' "./" "plugin source points at repo root"
 
-# hooks.json: SessionStart → loader with claude arg, uses plugin root var
+# hooks.json: events nested under a top-level `hooks` object (CC schema), claude arg, plugin root
 hj=$(cat "$ROOT/hooks/hooks.json")
 echo "$hj" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "hooks.json is valid JSON"
-assert_contains "$hj" "SessionStart" "hooks.json registers SessionStart"
+assert_json_field "$hj" '.hooks | type' "object" "hooks.json wraps events under top-level hooks object"
+assert_json_field "$hj" '.hooks.SessionStart[0].hooks[0].type' "command" "SessionStart hook registered under .hooks"
 assert_contains "$hj" "handoff-loader.sh" "hooks.json calls the loader"
 assert_contains "$hj" "claude" "hooks.json passes claude arg"
 assert_contains "$hj" "CLAUDE_PLUGIN_ROOT" "hooks.json resolves via plugin root"

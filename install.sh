@@ -34,32 +34,12 @@ render() {
 
 log() { printf '  %s\n' "$1"; }
 
-# Install a hook template into a (possibly pre-existing) hooks.json WITHOUT clobbering
-# the user's other hooks. Merges our single event-entry in; idempotent; backs up.
-install_hook() { # template_path dest_path
-  local tmpl="$1" dest="$2" rendered ev
-  rendered=$(render "$tmpl")
-  ev=$(printf '%s' "$rendered" | jq -r 'keys[0]')
-  if [ -f "$dest" ] && jq -e . "$dest" >/dev/null 2>&1; then
-    cp "$dest" "$dest.bak"
-    printf '%s' "$rendered" | jq --arg ev "$ev" --slurpfile existing "$dest" '
-      . as $ours
-      | $existing[0]
-      | .[$ev] = (
-          (((.[$ev]) // [])
-            | map(select(((.hooks // []) | map(.command) | join(" ")) | contains("handoff-loader.sh") | not)))
-          + $ours[$ev])
-    ' > "$dest.tmp" && mv "$dest.tmp" "$dest"
-    log "merged $ev hook into existing $(basename "$dest") (backup: $(basename "$dest").bak)"
-  else
-    printf '%s\n' "$rendered" > "$dest"
-    log "wrote $(basename "$dest")"
-  fi
-}
-
-# Gemini hooks live under .hooks.SessionStart inside settings.json (which holds ALL the
-# user's Gemini settings). Merge only that array; preserve everything else.
-install_gemini_settings() { # template_path dest_path
+# Merge our SessionStart hook into a (possibly pre-existing) config WITHOUT clobbering the
+# user's other hooks/settings. All three harnesses nest events under a top-level `hooks`
+# object (Claude/Codex hooks.json, Gemini settings.json), so we merge into `.hooks.SessionStart`.
+# Dedup is by serialized-entry substring, which works for both Claude/Codex-nested entries
+# ({hooks:[{command}]}) and Gemini-flat entries ({command}). Idempotent; backs up.
+merge_session_hook() { # template_path dest_path
   local tmpl="$1" dest="$2" rendered
   rendered=$(render "$tmpl")
   if [ -f "$dest" ] && jq -e . "$dest" >/dev/null 2>&1; then
@@ -69,14 +49,14 @@ install_gemini_settings() { # template_path dest_path
       | $existing[0]
       | .hooks = (.hooks // {})
       | .hooks.SessionStart = (
-          ((((.hooks.SessionStart) // [])
-            | map(select((.command // "") | contains("handoff-loader.sh") | not))))
+          (((.hooks.SessionStart) // [])
+            | map(select((tojson | contains("handoff-loader.sh")) | not)))
           + $ours)
     ' > "$dest.tmp" && mv "$dest.tmp" "$dest"
-    log "merged SessionStart hook into existing settings.json (backup: settings.json.bak)"
+    log "merged SessionStart hook into existing $(basename "$dest") (backup: $(basename "$dest").bak)"
   else
     printf '%s\n' "$rendered" > "$dest"
-    log "wrote settings.json"
+    log "wrote $(basename "$dest")"
   fi
 }
 
@@ -85,7 +65,7 @@ if want codex && [ -d "$HOME_DIR/.codex" ]; then
   echo "Codex detected → $HOME_DIR/.codex"
   mkdir -p "$HOME_DIR/.codex/prompts"
   cp "$ROOT/core/handoff.md" "$HOME_DIR/.codex/prompts/handoff.md"
-  install_hook "$ROOT/adapters/codex/hooks.json" "$HOME_DIR/.codex/hooks.json"
+  merge_session_hook "$ROOT/adapters/codex/hooks.json" "$HOME_DIR/.codex/hooks.json"
   log "prompt + SessionStart hook installed"
 fi
 
@@ -94,7 +74,7 @@ if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
   echo "Gemini detected → $HOME_DIR/.gemini"
   mkdir -p "$HOME_DIR/.gemini/commands"
   render "$ROOT/adapters/gemini/commands/handoff.toml" > "$HOME_DIR/.gemini/commands/handoff.toml"
-  install_gemini_settings "$ROOT/adapters/gemini/settings.json" "$HOME_DIR/.gemini/settings.json"
+  merge_session_hook "$ROOT/adapters/gemini/settings.json" "$HOME_DIR/.gemini/settings.json"
   log "command + SessionStart hook installed"
 fi
 
