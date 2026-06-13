@@ -7,8 +7,10 @@ pj=$(cat "$ROOT/.claude-plugin/plugin.json")
 assert_json_field "$pj" '.name' "handoff" "plugin.json name"
 echo "$pj" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "plugin.json is valid JSON"
 
-# marketplace.json lists the plugin
-mp=$(cat "$ROOT/marketplace.json")
+# marketplace.json lives in .claude-plugin/ (where Claude Code looks for it) + lists the plugin
+assert_eq "$([ -f "$ROOT/.claude-plugin/marketplace.json" ] && echo yes || echo no)" "yes" "marketplace.json in .claude-plugin/"
+assert_eq "$([ -f "$ROOT/marketplace.json" ] && echo yes || echo no)" "no" "no stray marketplace.json at repo root"
+mp=$(cat "$ROOT/.claude-plugin/marketplace.json")
 echo "$mp" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "marketplace.json is valid JSON"
 assert_contains "$mp" "handoff" "marketplace lists handoff"
 
