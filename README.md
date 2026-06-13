@@ -16,11 +16,19 @@ verbatim. The next session loads a handoff you can trust.
 
 ## Supported harnesses
 
-| Harness     | `/handoff` command        | Auto-load              | Install        |
-|-------------|---------------------------|------------------------|----------------|
-| Claude Code | ✅ plugin command          | ✅ `SessionStart` hook | marketplace    |
-| Codex CLI   | ✅ prompt                  | ✅ `SessionStart` hook | `install.sh`   |
-| Gemini CLI  | ✅ TOML command            | ✅ `BeforeAgent` hook  | `install.sh`   |
+All three deliver a stdin JSON payload (`.cwd`) to a `SessionStart` hook and accept injected
+context, so one loader serves all of them; only the output format differs (Gemini requires a
+JSON envelope).
+
+| Harness     | `/handoff` command | Auto-load (`SessionStart` hook) | Install      | Verified                      |
+|-------------|--------------------|---------------------------------|--------------|-------------------------------|
+| Claude Code | ✅ plugin command   | ✅                              | marketplace  | runnable where you read this  |
+| Codex CLI   | ✅ prompt           | ✅ `~/.codex/hooks.json`        | `install.sh` | wired to official docs¹       |
+| Gemini CLI  | ✅ TOML command     | ✅ `~/.gemini/settings.json`    | `install.sh` | wired to official docs¹       |
+
+¹ The Codex/Gemini wiring is built to each tool's **official** hook spec and exercised by 79
+synthetic tests, but has not yet been run inside a live Codex/Gemini session in this repo. Do
+the 30-second smoke test under [Verifying it works](#verifying-it-works) on first install.
 
 Everything shares one loader (`core/handoff-loader.sh`) and one command body
 (`core/handoff.md`). Adding a harness later is wiring, not a rewrite.
@@ -56,8 +64,13 @@ automatically.
 ./install.sh --harness gemini   # limit to one harness (repeatable)
 ```
 
-`install.sh` copies `core/handoff.md` into the harness prompt/command dir and writes a
-hook file with the repo's absolute path baked in. Re-run it after moving the repo.
+`install.sh` copies `core/handoff.md` into the harness prompt/command dir and **merges** the
+hook into the harness config (it backs up and preserves any hooks/settings you already have —
+it never blind-overwrites). It bakes in the repo's absolute path, so re-run it after moving the
+repo.
+
+> **Codex:** lifecycle hooks may need enabling — set `features.hooks` in `~/.codex/config.toml`
+> if your Codex version gates them. Run `/hooks` inside Codex to confirm the handoff hook loaded.
 
 ### Manual (any harness)
 
@@ -81,16 +94,34 @@ prompt = """
 Subcommand argument: {{args}}
 """
 ```
-`~/.gemini/hooks.json`:
+Gemini hooks live in `~/.gemini/settings.json` under a top-level `hooks` object (merge this in
+— don't overwrite your other settings; note Gemini timeouts are **milliseconds**):
 ```json
-{ "BeforeAgent": [ { "hooks": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-loader.sh\" gemini", "timeout": 5 }
-] } ] }
+{ "hooks": { "SessionStart": [
+  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-loader.sh\" gemini", "timeout": 5000 }
+] } }
 ```
 
 **Claude Code (manual, without marketplace)** — add this repo dir as a plugin: the repo root
 is the plugin root (`.claude-plugin/plugin.json`, `commands/handoff.md`, `hooks/hooks.json` are
 already wired with `${CLAUDE_PLUGIN_ROOT}`).
+
+## Verifying it works
+
+The synthetic test suite proves the loader/installer logic, but only a live session proves the
+harness actually fires the hook. 30-second smoke test per harness:
+
+1. In a project, create `.handoff/HANDOFF.md` (run `/handoff`, or hand-write one with a
+   `summary:`/`resume:` frontmatter).
+2. Start a fresh session of the harness **in that directory**.
+3. Confirm the first response begins with a `🤝 Handoff …` line. If it doesn't:
+   - **Claude Code:** check the plugin is enabled in `/plugin`.
+   - **Codex:** run `/hooks`; if the handoff hook isn't listed, enable `features.hooks` (above).
+   - **Gemini:** confirm the `SessionStart` block landed in `~/.gemini/settings.json` and that
+     `bash ~/.gemini/... </dev/null` style invocation isn't blocked.
+
+A handoff written in one harness should produce the same `🤝` line when you open the project in
+another — that round-trip is the whole point.
 
 ## Usage
 
@@ -126,11 +157,11 @@ Wire it to a pre-exit / pre-compact event (events differ per harness). Replace `
 ] } ]
 ```
 
-**Gemini** — add to `~/.gemini/hooks.json`:
+**Gemini** — add to the `hooks` object in `~/.gemini/settings.json` (timeout in ms):
 ```json
-"AfterAgent": [ { "hooks": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-snapshot.sh\"", "timeout": 5 }
-] } ]
+"AfterAgent": [
+  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-snapshot.sh\"", "timeout": 5000 }
+]
 ```
 
 When a snapshot exists and no manual handoff does, the next session shows:
@@ -179,8 +210,8 @@ loader follows symlinks transparently.
 - **Claude Code:** `/plugin uninstall handoff`.
 - **Codex:** remove `~/.codex/prompts/handoff.md` and the `SessionStart` entry from
   `~/.codex/hooks.json`.
-- **Gemini:** remove `~/.gemini/commands/handoff.toml` and the `BeforeAgent` entry from
-  `~/.gemini/hooks.json`.
+- **Gemini:** remove `~/.gemini/commands/handoff.toml` and the `SessionStart` entry from the
+  `hooks` object in `~/.gemini/settings.json` (a `.bak` from install is alongside it).
 
 Existing `.handoff/` files in your projects are left untouched — delete manually if desired.
 
@@ -191,6 +222,11 @@ Tests are dependency-light bash (require `jq`):
 ```
 bash tests/run.sh
 ```
+
+The `commands/handoff.md` and `adapters/codex/prompts/handoff.md` entries are git symlinks to
+`core/handoff.md` (single source of truth). They resolve on macOS/Linux; a Windows checkout
+without symlink support would need them copied — `install.sh` copies rather than symlinks, so
+installed setups are unaffected.
 
 ## License
 

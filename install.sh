@@ -57,6 +57,29 @@ install_hook() { # template_path dest_path
   fi
 }
 
+# Gemini hooks live under .hooks.SessionStart inside settings.json (which holds ALL the
+# user's Gemini settings). Merge only that array; preserve everything else.
+install_gemini_settings() { # template_path dest_path
+  local tmpl="$1" dest="$2" rendered
+  rendered=$(render "$tmpl")
+  if [ -f "$dest" ] && jq -e . "$dest" >/dev/null 2>&1; then
+    cp "$dest" "$dest.bak"
+    printf '%s' "$rendered" | jq --slurpfile existing "$dest" '
+      (.hooks.SessionStart) as $ours
+      | $existing[0]
+      | .hooks = (.hooks // {})
+      | .hooks.SessionStart = (
+          ((((.hooks.SessionStart) // [])
+            | map(select((.command // "") | contains("handoff-loader.sh") | not))))
+          + $ours)
+    ' > "$dest.tmp" && mv "$dest.tmp" "$dest"
+    log "merged SessionStart hook into existing settings.json (backup: settings.json.bak)"
+  else
+    printf '%s\n' "$rendered" > "$dest"
+    log "wrote settings.json"
+  fi
+}
+
 # ── Codex ────────────────────────────────────────────────────
 if want codex && [ -d "$HOME_DIR/.codex" ]; then
   echo "Codex detected → $HOME_DIR/.codex"
@@ -71,8 +94,8 @@ if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
   echo "Gemini detected → $HOME_DIR/.gemini"
   mkdir -p "$HOME_DIR/.gemini/commands"
   render "$ROOT/adapters/gemini/commands/handoff.toml" > "$HOME_DIR/.gemini/commands/handoff.toml"
-  install_hook "$ROOT/adapters/gemini/hooks.json" "$HOME_DIR/.gemini/hooks.json"
-  log "command + BeforeAgent hook installed"
+  install_gemini_settings "$ROOT/adapters/gemini/settings.json" "$HOME_DIR/.gemini/settings.json"
+  log "command + SessionStart hook installed"
 fi
 
 # ── Claude Code ──────────────────────────────────────────────

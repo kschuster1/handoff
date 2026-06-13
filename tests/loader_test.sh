@@ -9,9 +9,9 @@ out=$(printf '{"cwd":"%s"}' "$TMP" | bash "$LOADER" claude)
 assert_contains "$out" "No handoff for this project" "claude: no-handoff banner"
 assert_contains "$out" "∅ No handoff available" "claude: no-handoff instruction line"
 
-# --- no handoff, gemini mode: cwd from env, JSON output ---
-out=$(GEMINI_CWD="$TMP" bash "$LOADER" gemini </dev/null)
-assert_json_field "$out" '.hookSpecificOutput.hookEventName' "BeforeAgent" "gemini: hookEventName"
+# --- no handoff, gemini mode: cwd from stdin JSON, JSON output ---
+out=$(printf '{"cwd":"%s"}' "$TMP" | bash "$LOADER" gemini)
+assert_json_field "$out" '.hookSpecificOutput.hookEventName' "SessionStart" "gemini: hookEventName"
 ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
 assert_contains "$ctx" "∅ No handoff available" "gemini: no-handoff inside additionalContext"
 
@@ -58,7 +58,7 @@ assert_not_contains "$out" "auto-loaded, fresh" "inject:full stale → not misla
 
 # ---------- gemini full inject is valid JSON carrying the body ----------
 DG=$(mktemp -d); mkfix "$DG" "gem task" "resume gem" '## Task\nline with "quotes" and\nnewlines'
-out=$(GEMINI_CWD="$DG" bash "$LOADER" gemini </dev/null)
+out=$(printf '{"cwd":"%s"}' "$DG" | bash "$LOADER" gemini)
 # must be parseable JSON
 echo "$out" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "gemini full: output is valid JSON"
 ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')

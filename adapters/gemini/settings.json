@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "bash \"{{HANDOFF_ROOT}}/core/handoff-loader.sh\" gemini",
+        "timeout": 5000
+      }
+    ]
+  }
+}

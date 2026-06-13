@@ -1,7 +1,14 @@
 # Cross-Harness Handoff — Design
 
 **Date:** 2026-06-13
-**Status:** Approved (pending spec review)
+**Status:** Approved — **superseded in part during implementation** (see correction below)
+
+> **CORRECTION (post-implementation):** the Gemini details in this doc came from a third-party
+> source and were wrong. Per Gemini's *official* hook reference, Gemini fires `SessionStart`
+> (not `BeforeAgent`, which is per-prompt), passes cwd via **stdin JSON `.cwd`** (not
+> `$GEMINI_CWD`), and configures hooks in **`~/.gemini/settings.json`** under a `hooks` object
+> (not a standalone `hooks.json`). The shipped code uses the corrected contract — all three
+> harnesses now share `SessionStart` + stdin `.cwd`. The README reflects the as-built behaviour.
 **Target harnesses:** Claude Code, Codex CLI, Gemini CLI (Copilot CLI explicitly out of scope)
 
 ## Problem

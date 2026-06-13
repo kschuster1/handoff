@@ -1,25 +1,21 @@
 #!/usr/bin/env bash
 # handoff-loader.sh [claude|codex|gemini]
-# Session-start loader. Emits handoff context. cwd source + output format depend on harness.
+# SessionStart loader for all three harnesses. They all deliver a stdin JSON payload
+# with a `.cwd` field; only the OUTPUT format differs (gemini requires a JSON envelope).
 set -e
 
 HARNESS="${1:-claude}"
 
-# stdin JSON only for claude/codex (gemini passes cwd via env)
-INPUT=""
-if [ "$HARNESS" != "gemini" ]; then
-  INPUT=$(cat 2>/dev/null || true)
-fi
+# All harnesses pass a stdin JSON payload at SessionStart; read it.
+INPUT=$(cat 2>/dev/null || true)
 
-# ── resolve session cwd ──────────────────────────────────────
+# ── resolve session cwd (stdin JSON .cwd, then $PWD) ─────────
 CWD=""
-case "$HARNESS" in
-  gemini) CWD="${GEMINI_CWD:-}";;
-  *)      if command -v jq >/dev/null 2>&1 && [ -n "$INPUT" ]; then
-            CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
-          fi;;
-esac
-CWD="${CWD:-$PWD}"
+if command -v jq >/dev/null 2>&1 && [ -n "$INPUT" ]; then
+  CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+fi
+# legacy/fallback: honor $GEMINI_CWD if stdin gave us nothing
+CWD="${CWD:-${GEMINI_CWD:-$PWD}}"
 
 HDIR="$CWD/.handoff"
 HANDOFF="$HDIR/HANDOFF.md"
@@ -34,7 +30,7 @@ emit() {
       return 0   # emit nothing → Gemini gets no malformed context
     fi
     jq -n --arg c "$body" \
-      '{hookSpecificOutput:{hookEventName:"BeforeAgent",additionalContext:$c}}'
+      '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}}'
   else
     printf '%s\n' "$body"
   fi
