@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"{{HANDOFF_ROOT}}/core/handoff-loader.sh\" codex",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}
