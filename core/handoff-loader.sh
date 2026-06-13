@@ -66,7 +66,8 @@ autosave_body() {
   commits=$(printf '%s\n' "$fm" | grep -E '^commits:' | head -1 | sed 's/^commits: *//')
   now=$(date +%s)
   mtime=$(stat -c %Y "$AUTOSAVE" 2>/dev/null || stat -f %m "$AUTOSAVE" 2>/dev/null || echo "$now")
-  rel="$(( (now-mtime)/60 ))m ago"
+  local amin=$(( (now-mtime)/60 )); [ $amin -lt 0 ] && amin=0
+  rel="${amin}m ago"
   cat <<EOF
 ═══ Auto-snapshot present (no manual handoff) ═══
 ⚠ auto-snapshot: ${branch:-?}, ${dirty:-?} files dirty, ${commits:-?} commits — updated ${rel}
@@ -121,12 +122,13 @@ build_body() {
   fm=$(awk '/^---$/{c++; next} c==1{print} c>=2{exit}' "$HANDOFF")
   summary=$(printf '%s\n' "$fm" | grep -E '^summary:' | head -1 | sed 's/^summary: *//')
   resume=$(printf '%s\n' "$fm"  | grep -E '^resume:'  | head -1 | sed 's/^resume: *//')
-  inject=$(printf '%s\n' "$fm"  | grep -E '^inject:'  | head -1 | sed 's/^inject: *//' | tr -d ' ')
+  # frontmatter values must be single-line (multi-line YAML scalars not supported)
+  inject=$(printf '%s\n' "$fm"  | grep -E '^inject:'  | head -1 | sed 's/^inject: *//' | tr -d ' \t')
 
   local now mtime age
   now=$(date +%s)
   mtime=$(stat -c %Y "$HANDOFF" 2>/dev/null || stat -f %m "$HANDOFF" 2>/dev/null || echo "$now")
-  age=$((now - mtime))
+  age=$((now - mtime)); [ $age -lt 0 ] && age=0
 
   local rel
   if   [ $age -lt 3600 ];   then rel="$((age/60))m ago"
@@ -150,7 +152,7 @@ build_body() {
   local confirm
 
   if [ "$mode" = "full" ]; then
-    printf '═══ HANDOFF.md (auto-loaded, fresh %s, ~%s tokens) ═══\n' "$rel" "$tokens"
+    printf '═══ HANDOFF.md (auto-loaded, %s%s, ~%s tokens) ═══\n' "$rel" "$stale" "$tokens"
     printf 'Source: .handoff/HANDOFF.md\n'
     printf 'If current task does NOT match this handoff, treat as stale context — ignore and proceed.\n'
     printf -- '─────────────────────────────────────────────\n'

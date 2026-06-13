@@ -47,6 +47,15 @@ touch -t "$ts" "$D3/.handoff/HANDOFF.md"
 out=$(printf '{"cwd":"%s"}' "$D3" | bash "$LOADER" claude)
 assert_contains "$out" "STALE" "old handoff → STALE warning"
 
+# inject:full on a STALE file must still surface the STALE warning (not mislabel "fresh")
+D3b=$(mktemp -d); mkdir -p "$D3b/.handoff"
+printf -- '---\nsummary: forced\nresume: r\ninject: full\n---\n\n# Handoff\n\nbody\n' > "$D3b/.handoff/HANDOFF.md"
+touch -t "$ts" "$D3b/.handoff/HANDOFF.md"
+out=$(printf '{"cwd":"%s"}' "$D3b" | bash "$LOADER" claude)
+assert_contains "$out" "HANDOFF.md (auto-loaded" "inject:full stale → still full inject"
+assert_contains "$out" "STALE" "inject:full stale → STALE warning not suppressed"
+assert_not_contains "$out" "auto-loaded, fresh" "inject:full stale → not mislabeled fresh"
+
 # ---------- gemini full inject is valid JSON carrying the body ----------
 DG=$(mktemp -d); mkfix "$DG" "gem task" "resume gem" '## Task\nline with "quotes" and\nnewlines'
 out=$(GEMINI_CWD="$DG" bash "$LOADER" gemini </dev/null)
