@@ -4,6 +4,14 @@
 # capturing git ground-truth. Self-gating; never clobbers a manual HANDOFF.md.
 set -e
 
+# ── debug breadcrumb (opt-in) ──
+# Logs ONE line every time this script is entered, BEFORE any gate/exit, so
+# "hook fired and self-gated" is distinguishable from "hook never fired".
+# Enable with HANDOFF_DEBUG=1; silent otherwise. Never affects normal behavior.
+[ -n "$HANDOFF_DEBUG" ] && printf '%s entered (arg=%s tty=%s)\n' \
+  "$(date -u +%FT%TZ)" "${1:-none}" "$([ -t 0 ] && echo yes || echo no)" \
+  >> "${TMPDIR:-/tmp}/handoff-snapshot.log" 2>/dev/null || true
+
 # ── resolve cwd: positional $1 → stdin JSON .cwd → $GEMINI_CWD → $PWD ──
 # Hooks (SessionEnd/PreCompact/Stop) deliver a stdin JSON payload with a `.cwd`
 # field, same as handoff-loader.sh. Read it ONLY when stdin is not a tty, so a
