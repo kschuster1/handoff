@@ -94,16 +94,17 @@ fi
 
 # ── Optional: autosave hooks (mechanical snapshot on clear/compact) ──
 # Claude Code gets these built into the plugin's hooks.json (SessionEnd + PreCompact), so
-# nothing to do there. For Codex/Gemini we wire them here — but their hook-event support is
-# UNVERIFIED (assumed from the SessionStart adapter pattern), so this path is EXPERIMENTAL.
+# nothing to do there. Codex is VERIFIED — it fires both SessionEnd and PreCompact and the
+# snapshot regenerates correctly. Gemini's AfterAgent event support is still UNVERIFIED, so
+# the Gemini path remains EXPERIMENTAL (safe to remove via the .bak backup).
 if [ "$AUTOSAVE" -eq 1 ]; then
   echo "Autosave snapshot hooks (Claude Code: built into the plugin):"
-  log "EXPERIMENTAL for Codex/Gemini — event support is unverified; safe to remove via the .bak backup."
   if want codex && [ -d "$HOME_DIR/.codex" ]; then
     merge_hooks "$ROOT/adapters/codex/hooks-autosave.json" "$HOME_DIR/.codex/hooks.json"
-    log "codex: snapshot hooks (SessionEnd + PreCompact) wired"
+    log "codex: snapshot hooks (SessionEnd + PreCompact) wired [verified]"
   fi
   if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
+    log "EXPERIMENTAL for Gemini — AfterAgent event support is unverified; safe to remove via the .bak backup."
     merge_hooks "$ROOT/adapters/gemini/settings-autosave.json" "$HOME_DIR/.gemini/settings.json"
     log "gemini: snapshot hook (AfterAgent) wired"
   fi
