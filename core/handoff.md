@@ -9,9 +9,11 @@ Subcommand argument received: **$ARGUMENTS**
 
 ## Interactive questions (harness-neutral)
 
-Whenever this command says "ask the user": If an interactive question tool
-(e.g. AskUserQuestion) is available, use it. Otherwise present the options as a
-numbered list in plain text and wait for the user's reply before proceeding.
+Whenever this command says "ask the user": if an interactive question tool
+(e.g. AskUserQuestion) is available, you MUST call it — render the options as
+selectable choices, each with a one-line description. Never substitute a flat
+bracketed text prompt like `[Yes / No]` when the tool exists. Only fall back to
+a plain numbered list (and wait for the reply) when no such tool is available.
 
 ## Dispatch
 
@@ -178,10 +180,22 @@ Before writing, present the draft. For ambiguous items, ask the user: "Item: `<t
 
 ### 6. Final confirm + write
 
-Show full draft. Ask the user: "Write to `.handoff/HANDOFF.md`? [Yes / Edit section / Cancel]"
+Show the full draft, then ask the user via the interactive tool (header
+`Confirm write`, question `Write this to .handoff/HANDOFF.md?`). Present these
+selectable options, each with its one-line description:
+
+- **Yes, write it** — Overwrite `.handoff/HANDOFF.md` with the draft above.
+- **Clear instead** — *(include this option ONLY if the task looks shipped — PR open / work complete)* run `/handoff clear` (archive) rather than keep stale resume state.
+- **Edit a section** — Revise part of the draft before writing.
+
+(The tool auto-provides a free-text / "chat about this" escape — do not add a
+manual Cancel option.)
+
+Then act on the choice:
 - Yes → Write file.
-- Edit section → ask which, revise, re-confirm.
-- Cancel → discard.
+- Clear instead → run the CLEAR flow.
+- Edit a section → ask which section, revise, re-confirm (loop back to this step).
+- Free-text escape / cancel → discard, leave `HANDOFF.md` unchanged.
 
 ### 7. Token budget
 
