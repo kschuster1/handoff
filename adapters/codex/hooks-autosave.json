@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"{{HANDOFF_ROOT}}/core/handoff-snapshot.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"{{HANDOFF_ROOT}}/core/handoff-snapshot.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

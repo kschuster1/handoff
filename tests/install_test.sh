@@ -54,4 +54,30 @@ assert_json_field "$gs" '.theme' "dark" "gemini merge preserves unrelated settin
 assert_json_field "$gs" '.hooks.BeforeTool[0].command' "user-scan" "gemini merge preserves user's other hook"
 assert_contains "$gs" "handoff-loader.sh" "gemini merge adds SessionStart handoff hook"
 assert_eq "$([ -f "$FH3/.gemini/settings.json.bak" ] && echo yes || echo no)" "yes" "gemini settings.json backed up"
+
+# ── shipped Claude plugin hooks.json: clear + compact snapshot wired, loader intact ──
+ch=$(cat "$ROOT/hooks/hooks.json")
+assert_json_field "$ch" '.hooks.SessionEnd[0].hooks[0].command | contains("handoff-snapshot.sh")' "true" "claude plugin: SessionEnd snapshot present (covers /clear)"
+assert_json_field "$ch" '.hooks.PreCompact[0].hooks[0].command | contains("handoff-snapshot.sh")' "true" "claude plugin: PreCompact snapshot present (covers /compact)"
+assert_json_field "$ch" '.hooks.SessionStart[0].hooks[0].command | contains("handoff-loader.sh")' "true" "claude plugin: SessionStart loader intact"
+
+# ── --autosave wires codex snapshot hooks; preserves SessionStart + user hooks; idempotent ──
+FH4=$(mktemp -d); mkdir -p "$FH4/.codex"
+printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash /x/core/handoff-loader.sh codex"}]}],"PreToolUse":[{"hooks":[{"type":"command","command":"user-guard"}]}]}}' > "$FH4/.codex/hooks.json"
+HANDOFF_FAKE_HOME="$FH4" bash "$INSTALL" --yes --autosave --harness codex >/dev/null 2>&1
+HANDOFF_FAKE_HOME="$FH4" bash "$INSTALL" --yes --autosave --harness codex >/dev/null 2>&1   # twice
+cj=$(cat "$FH4/.codex/hooks.json")
+assert_json_field "$cj" '.hooks.PreToolUse[0].hooks[0].command' "user-guard" "autosave: codex user's PreToolUse untouched"
+assert_json_field "$cj" '[.hooks.SessionEnd[].hooks[].command | select(contains("handoff-snapshot.sh"))] | length' "1" "autosave: codex SessionEnd snapshot exactly once after 2 runs"
+assert_json_field "$cj" '[.hooks.PreCompact[].hooks[].command | select(contains("handoff-snapshot.sh"))] | length' "1" "autosave: codex PreCompact snapshot exactly once after 2 runs"
+assert_json_field "$cj" '[.hooks.SessionStart[].hooks[].command | select(contains("handoff-loader.sh"))] | length' "1" "autosave: codex SessionStart loader survives exactly once"
+assert_contains "$cj" "$ROOT/core/handoff-snapshot.sh" "autosave: codex snapshot path resolved to repo abs path"
+
+# ── --autosave wires gemini AfterAgent snapshot ──
+FH5=$(mktemp -d); mkdir -p "$FH5/.gemini"
+HANDOFF_FAKE_HOME="$FH5" bash "$INSTALL" --yes --autosave --harness gemini >/dev/null 2>&1
+gj=$(cat "$FH5/.gemini/settings.json")
+assert_json_field "$gj" '[.hooks.AfterAgent[].command | select(contains("handoff-snapshot.sh"))] | length' "1" "autosave: gemini AfterAgent snapshot wired"
+assert_json_field "$gj" '.hooks.SessionStart[0].command | contains("handoff-loader.sh")' "true" "autosave: gemini SessionStart loader intact alongside AfterAgent"
+
 finish

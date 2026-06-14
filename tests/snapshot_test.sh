@@ -45,4 +45,17 @@ assert_contains "$b" "branch:" "commitless snapshot still has frontmatter"
 fences=$(grep -c '```' "$R4/.handoff/AUTOSAVE.md" 2>/dev/null || echo 0)
 assert_eq "$((fences % 2))" "0" "commitless snapshot has balanced code fences (not truncated)"
 
+# hook path: cwd comes from a stdin JSON .cwd payload, NO positional arg
+R5=$(newrepo)
+( cd "$R5" && echo change >> a.txt )
+printf '{"cwd":"%s"}' "$R5" | bash "$SNAP"
+assert_eq "$([ -f "$R5/.handoff/AUTOSAVE.md" ] && echo yes || echo no)" "yes" "stdin .cwd → snapshot written to right repo"
+
+# breadcrumb is gitignored, idempotently (never shows up in git status)
+gi=$(cat "$R5/.gitignore" 2>/dev/null || echo "")
+assert_contains "$gi" ".handoff/AUTOSAVE.md" "AUTOSAVE.md added to .gitignore"
+bash "$SNAP" "$R5"   # second run must not duplicate the gitignore line
+cnt=$(grep -cxF '.handoff/AUTOSAVE.md' "$R5/.gitignore" 2>/dev/null || echo 0)
+assert_eq "$cnt" "1" "gitignore entry not duplicated on second snapshot"
+
 finish

@@ -4,7 +4,18 @@
 # capturing git ground-truth. Self-gating; never clobbers a manual HANDOFF.md.
 set -e
 
-CWD="${1:-$PWD}"
+# ── resolve cwd: positional $1 → stdin JSON .cwd → $GEMINI_CWD → $PWD ──
+# Hooks (SessionEnd/PreCompact/Stop) deliver a stdin JSON payload with a `.cwd`
+# field, same as handoff-loader.sh. Read it ONLY when stdin is not a tty, so a
+# manual `bash handoff-snapshot.sh` from a terminal never blocks on `cat`.
+CWD="$1"
+if [ -z "$CWD" ] && [ ! -t 0 ]; then
+  INPUT=$(cat 2>/dev/null || true)
+  if command -v jq >/dev/null 2>&1 && [ -n "$INPUT" ]; then
+    CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
+  fi
+fi
+CWD="${CWD:-${GEMINI_CWD:-$PWD}}"
 cd "$CWD" 2>/dev/null || exit 0
 
 # only meaningful inside a git work tree
@@ -31,6 +42,14 @@ if [ "$dirty" -eq 0 ] && [ "$commits" -eq 0 ]; then
 fi
 
 mkdir -p "$HDIR"
+
+# keep the mechanical breadcrumb out of git so it never shows up uninvited in
+# `git status` / PR diffs (idempotent; only touches the repo-root .gitignore).
+GI="$CWD/.gitignore"
+if ! { [ -f "$GI" ] && grep -qxF '.handoff/AUTOSAVE.md' "$GI"; }; then
+  printf '.handoff/AUTOSAVE.md\n' >> "$GI"
+fi
+
 {
   printf -- '---\n'
   printf 'generated_by: handoff-snapshot.sh\n'

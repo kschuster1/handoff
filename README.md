@@ -137,32 +137,34 @@ Typical flow: work until you need to stop → `/handoff` (it verifies against gi
 confirms, writes) → next session auto-loads it and offers to resume → `/handoff clear` when the
 work is done so a stale handoff doesn't haunt the next session.
 
-## Auto-snapshot (opt-in safety net)
+## Auto-snapshot (safety net for forgotten `/handoff`)
 
-For the "I forgot to run `/handoff`" case, `core/handoff-snapshot.sh` writes a **mechanical**
-git snapshot to `.handoff/AUTOSAVE.md` — no model involved, so it's always factually accurate.
-It is **size-capped** and **pointer-only on load** (the loader emits one line, never injects the
-body), and it **never clobbers** a manual `HANDOFF.md`. It self-gates: nothing is written unless
-the tree is dirty or there are commits ahead of upstream.
+For the "I cleared / quit without running `/handoff`" case, `core/handoff-snapshot.sh` writes a
+**mechanical** git snapshot to `.handoff/AUTOSAVE.md` — no model involved, so it's always
+factually accurate. It is **size-capped** and **pointer-only on load** (the loader emits one
+line, never injects the body), it **never clobbers** a manual `HANDOFF.md`, and it adds
+`.handoff/AUTOSAVE.md` to the repo's `.gitignore` so the breadcrumb never shows up uninvited in
+`git status`. It self-gates: nothing is written unless the tree is dirty or there are commits
+ahead of upstream.
 
-Wire it to a pre-exit / pre-compact event (events differ per harness). Replace `/ABS/PATH`:
+**It is a breadcrumb, not a handoff.** It captures git ground-truth (branch, dirty files,
+recent commits, `diff --stat`) — not the decisions, blockers, or next-steps a written handoff
+holds. For the good version, run `/handoff` *before* clearing. (At clear/exit time no model is
+running — only a shell hook — so a narrative handoff is impossible to generate then.)
 
-**Claude Code / Codex** — add to the harness `hooks.json` (alongside `SessionStart`):
-```json
-"PreCompact": [ { "hooks": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-snapshot.sh\"", "timeout": 5 }
-] } ],
-"Stop": [ { "hooks": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-snapshot.sh\"", "timeout": 5 }
-] } ]
-```
+### Claude Code — built in (default-on)
+The plugin ships these hooks in `hooks/hooks.json`, so the snapshot fires automatically:
+- **`SessionEnd`** → covers `/clear`, quit, and logout.
+- **`PreCompact`** → covers `/compact` and auto-compaction.
 
-**Gemini** — add to the `hooks` object in `~/.gemini/settings.json` (timeout in ms):
-```json
-"AfterAgent": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-snapshot.sh\"", "timeout": 5000 }
-]
-```
+No setup needed. (`Stop` is deliberately not wired — it fires every turn; `SessionEnd` already
+covers exit.)
+
+### Codex / Gemini — `./install.sh --autosave` (experimental)
+Their hook-event support is **unverified**, so this path is experimental and easy to undo (each
+merge backs up to `<config>.bak`). It wires:
+- **Codex** (`~/.codex/hooks.json`): `SessionEnd` + `PreCompact` → `core/handoff-snapshot.sh`.
+- **Gemini** (`~/.gemini/settings.json`): `AfterAgent` → `core/handoff-snapshot.sh`.
 
 When a snapshot exists and no manual handoff does, the next session shows:
 `🤝 Auto-snapshot available — read .handoff/AUTOSAVE.md if resuming`.
