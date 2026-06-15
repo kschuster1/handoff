@@ -95,7 +95,7 @@ Gemini hooks live in `~/.gemini/settings.json` under a top-level `hooks` object 
 ```
 
 **Claude Code (manual, without marketplace)** — add this repo dir as a plugin: the repo root
-is the plugin root (`.claude-plugin/plugin.json`, `commands/handoff.md`, `hooks/hooks.json` are
+is the plugin root (`.claude-plugin/plugin.json`, `commands/handoff.md`, `hooks/claude.json` are
 already wired with `${CLAUDE_PLUGIN_ROOT}`).
 
 ## Verifying it works
