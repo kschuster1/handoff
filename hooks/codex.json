@@ -1,10 +1,10 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "bash \"${PLUGIN_ROOT}/core/handoff-loader.sh\" codex", "timeout": 5 } ] }
+      { "hooks": [ { "type": "command", "command": "bash \"./core/handoff-loader.sh\" codex", "timeout": 5 } ] }
     ],
     "PreCompact": [
-      { "hooks": [ { "type": "command", "command": "HANDOFF_EVENT=PreCompact bash \"${PLUGIN_ROOT}/core/handoff-snapshot.sh\"", "timeout": 5 } ] }
+      { "hooks": [ { "type": "command", "command": "HANDOFF_EVENT=PreCompact bash \"./core/handoff-snapshot.sh\"", "timeout": 5 } ] }
     ]
   }
 }

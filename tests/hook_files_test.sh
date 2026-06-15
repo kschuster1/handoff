@@ -14,10 +14,12 @@ assert_json_field "$cj" '.hooks.SessionStart[0].hooks[0].type' "command" "claude
 assert_json_field "$cj" '.hooks.SessionEnd[0].hooks[0].type' "command" "claude SessionEnd present"
 assert_json_field "$cj" '.hooks.PreCompact[0].hooks[0].type' "command" "claude PreCompact present"
 
-# Codex hook file: valid JSON, uses PLUGIN_ROOT, SessionStart+PreCompact, and NO SessionEnd (not a Codex event).
+# Codex hook file: valid JSON, uses plugin-root-relative ./core paths (figma pattern: Codex
+# runs plugin hooks with cwd=plugin root), SessionStart+PreCompact, and NO SessionEnd.
 xj=$(cat "$ROOT/hooks/codex.json")
 echo "$xj" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "codex.json valid JSON"
-assert_contains "$xj" "\${PLUGIN_ROOT}" "codex.json uses PLUGIN_ROOT"
+assert_contains "$xj" "./core/handoff-loader.sh" "codex.json uses plugin-root-relative path"
+assert_not_contains "$xj" "PLUGIN_ROOT" "codex.json does not rely on \${PLUGIN_ROOT} (uses relative ./core)"
 assert_not_contains "$xj" "CLAUDE_PLUGIN_ROOT" "codex.json does not use CLAUDE_PLUGIN_ROOT"
 assert_json_field "$xj" '.hooks.SessionStart[0].hooks[0].type' "command" "codex SessionStart present"
 assert_json_field "$xj" '.hooks.PreCompact[0].hooks[0].type' "command" "codex PreCompact present"
