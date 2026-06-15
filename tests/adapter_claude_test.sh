@@ -15,16 +15,17 @@ echo "$mp" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "marketplace.json is valid
 assert_contains "$mp" "handoff" "marketplace lists handoff"
 # Claude Code schema requires an owner OBJECT (not string)
 assert_json_field "$mp" '.owner | type' "object" "marketplace owner is an object (CC schema)"
-assert_json_field "$mp" '.plugins[0].source' "./" "plugin source points at repo root"
+assert_json_field "$mp" '.plugins[0].source.source' "github" "plugin source type is github"
+assert_json_field "$mp" '.plugins[0].source.ref' "release" "plugin source pinned to release branch"
 
-# hooks.json: events nested under a top-level `hooks` object (CC schema), claude arg, plugin root
-hj=$(cat "$ROOT/hooks/hooks.json")
-echo "$hj" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "hooks.json is valid JSON"
-assert_json_field "$hj" '.hooks | type' "object" "hooks.json wraps events under top-level hooks object"
+# claude.json: events nested under a top-level `hooks` object (CC schema), claude arg, plugin root
+hj=$(cat "$ROOT/hooks/claude.json")
+echo "$hj" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "claude.json is valid JSON"
+assert_json_field "$hj" '.hooks | type' "object" "claude.json wraps events under top-level hooks object"
 assert_json_field "$hj" '.hooks.SessionStart[0].hooks[0].type' "command" "SessionStart hook registered under .hooks"
-assert_contains "$hj" "handoff-loader.sh" "hooks.json calls the loader"
-assert_contains "$hj" "claude" "hooks.json passes claude arg"
-assert_contains "$hj" "CLAUDE_PLUGIN_ROOT" "hooks.json resolves via plugin root"
+assert_contains "$hj" "handoff-loader.sh" "claude.json calls the loader"
+assert_contains "$hj" "claude" "claude.json passes claude arg"
+assert_contains "$hj" "CLAUDE_PLUGIN_ROOT" "claude.json resolves via plugin root"
 
 # command is the shared body (symlink resolves to same content)
 assert_contains "$(cat "$ROOT/commands/handoff.md")" ".handoff/HANDOFF.md" "command body present (real file)"

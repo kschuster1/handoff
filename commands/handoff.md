@@ -178,6 +178,10 @@ inject: <optional: "full" or "pointer" to override loader auto-decision>
 
 Before writing, present the draft. For ambiguous items, ask the user: "Item: `<text>` — keep as [done] / change to [wip] / drop?". Cap 4 items per question. Skip only for items with a committed hash that exists in `git log`.
 
+### 5b. Ensure `.handoff/` is gitignored
+Before writing, make sure the project `.gitignore` contains a `.handoff/` line (add it if
+absent — idempotent). Handoff files are local-by-default and should not be committed.
+
 ### 6. Final confirm + write
 
 Show the full draft, then ask the user via the interactive tool (header

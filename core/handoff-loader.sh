@@ -21,6 +21,37 @@ HDIR="$CWD/.handoff"
 HANDOFF="$HDIR/HANDOFF.md"
 AUTOSAVE="$HDIR/AUTOSAVE.md"
 
+# ── one-time, silent, reversible legacy migration ────────────
+ensure_handoff_gitignore() { # project_root
+  local gi="$1/.gitignore"
+  { [ -f "$gi" ] && grep -qxF '.handoff/' "$gi"; } || printf '.handoff/\n' >> "$gi" 2>/dev/null || true
+}
+strip_handoff_refs() { # memory_file
+  local f="$1"
+  [ -f "$f" ] || return 0
+  grep -qE '\.ai/HANDOFF\.md|\.claude/HANDOFF\.md|handoff-pointer' "$f" 2>/dev/null || return 0
+  cp "$f" "$f.bak" 2>/dev/null || return 0
+  grep -vE '\.ai/HANDOFF\.md|\.claude/HANDOFF\.md|handoff-pointer' "$f.bak" > "$f" 2>/dev/null || cp "$f.bak" "$f" 2>/dev/null
+}
+migrate_legacy_handoff() { # project_root
+  local root="$1" legacy="" cand
+  [ -f "$root/.handoff/HANDOFF.md" ] && return 0
+  for cand in "$root/.ai/HANDOFF.md" "$root/.claude/HANDOFF.md"; do
+    [ -f "$cand" ] && { legacy="$cand"; break; }
+  done
+  [ -z "$legacy" ] && return 0
+  mkdir -p "$root/.handoff" 2>/dev/null || return 0
+  cp "$legacy" "$root/.handoff/HANDOFF.md" 2>/dev/null || return 0
+  mv "$legacy" "$legacy.bak" 2>/dev/null || true
+  ensure_handoff_gitignore "$root"
+  strip_handoff_refs "$root/CLAUDE.md"
+  strip_handoff_refs "$root/AGENTS.md"
+}
+# Run migration with errexit OFF so the internal `[ -f ] && ...` guards can't abort the loader.
+set +e
+migrate_legacy_handoff "$CWD"
+set -e
+
 # ── emit(): format the body for the active harness ───────────
 emit() {
   local body; body=$(cat)

@@ -23,12 +23,14 @@ JSON envelope).
 | Harness     | `/handoff` command | Auto-load (`SessionStart` hook) | Install      | Verified                      |
 |-------------|--------------------|---------------------------------|--------------|-------------------------------|
 | Claude Code | ✅ plugin command   | ✅                              | marketplace  | runnable where you read this  |
-| Codex CLI   | ✅ prompt           | ✅ `~/.codex/hooks.json`        | `install.sh` | wired to official docs¹       |
-| Gemini CLI  | ✅ TOML command     | ✅ `~/.gemini/settings.json`    | `install.sh` | wired to official docs¹       |
+| Codex CLI   | ✅ plugin command   | ✅                              | marketplace  | live session smoke-test on first use¹ |
+| Gemini CLI  | ✅ TOML command     | ✅ `~/.gemini/settings.json`    | `install.sh` | live session smoke-test on first use¹ |
 
-¹ The Codex/Gemini wiring is built to each tool's **official** hook spec and exercised by 79
-synthetic tests, but has not yet been run inside a live Codex/Gemini session in this repo. Do
-the 30-second smoke test under [Verifying it works](#verifying-it-works) on first install.
+¹ Session-start hook wiring is built to each tool's official hook spec and exercised by the
+synthetic test suite, but has not yet been run inside a live Codex/Gemini session in this repo.
+Do the 30-second smoke test under [Verifying it works](#verifying-it-works) on first install.
+**Autosave (Codex `PreCompact`, Gemini `AfterAgent`)** is the least-verified path — treat it as
+experimental until you confirm the events fire on your version.
 
 Everything shares one loader (`core/handoff-loader.sh`) and one command body
 (`core/handoff.md`). Adding a harness later is wiring, not a rewrite.
@@ -46,44 +48,34 @@ No handoff present → a single `∅ No handoff available` line, nothing else.
 
 ## Install
 
-### Claude Code (marketplace)
+### Claude Code
 
 ```
-/plugin marketplace add <repo-url-or-local-path>
+/plugin marketplace add kschuster1/handoff
 /plugin install handoff@claude-toolkit
 ```
 
-Enable in the `/plugin` menu. The `SessionStart` hook and `/handoff` command register
-automatically.
-
-### Codex + Gemini (script)
+### Codex
 
 ```
-./install.sh            # detects ~/.codex and ~/.gemini, wires whichever exist
-./install.sh --pointer  # also append a memory-file reminder (AGENTS.md / GEMINI.md)
-./install.sh --harness gemini   # limit to one harness (repeatable)
+codex plugin marketplace add kschuster1/handoff --ref release
 ```
 
-`install.sh` copies `core/handoff.md` into the harness prompt/command dir and **merges** the
-hook into the harness config (it backs up and preserves any hooks/settings you already have —
-it never blind-overwrites). It bakes in the repo's absolute path, so re-run it after moving the
-repo.
+Then install **handoff** from the Codex plugin UI.
 
-> **Codex:** lifecycle hooks may need enabling — set `features.hooks` in `~/.codex/config.toml`
-> if your Codex version gates them. Run `/hooks` inside Codex to confirm the handoff hook loaded.
+### Gemini (script)
 
-### Manual (any harness)
+```
+./install.sh --harness gemini
+```
+
+Claude and Codex install the lean `release` branch — only runtime files land on disk; the
+harness manages the install dir and uninstall.
+
+### Manual (Gemini / fallback)
 
 The pieces are: (1) the command body, (2) a session-start hook that runs the loader with the
 right harness arg. Replace `/ABS/PATH` with this repo's absolute path.
-
-**Codex** — `~/.codex/prompts/handoff.md` = a copy of `core/handoff.md`.
-`~/.codex/hooks.json`:
-```json
-{ "SessionStart": [ { "hooks": [
-  { "type": "command", "command": "bash \"/ABS/PATH/core/handoff-loader.sh\" codex", "timeout": 5 }
-] } ] }
-```
 
 **Gemini** — `~/.gemini/commands/handoff.toml`:
 ```toml
@@ -103,7 +95,7 @@ Gemini hooks live in `~/.gemini/settings.json` under a top-level `hooks` object 
 ```
 
 **Claude Code (manual, without marketplace)** — add this repo dir as a plugin: the repo root
-is the plugin root (`.claude-plugin/plugin.json`, `commands/handoff.md`, `hooks/hooks.json` are
+is the plugin root (`.claude-plugin/plugin.json`, `commands/handoff.md`, `hooks/claude.json` are
 already wired with `${CLAUDE_PLUGIN_ROOT}`).
 
 ## Verifying it works
@@ -143,7 +135,7 @@ For the "I cleared / quit without running `/handoff`" case, `core/handoff-snapsh
 **mechanical** git snapshot to `.handoff/AUTOSAVE.md` — no model involved, so it's always
 factually accurate. It is **size-capped** and **pointer-only on load** (the loader emits one
 line, never injects the body), it **never clobbers** a manual `HANDOFF.md`, and it adds
-`.handoff/AUTOSAVE.md` to the repo's `.gitignore` so the breadcrumb never shows up uninvited in
+`.handoff/` to the repo's `.gitignore` so handoff files never show up uninvited in
 `git status`. It self-gates: nothing is written unless the tree is dirty or there are commits
 ahead of upstream.
 
@@ -153,69 +145,53 @@ holds. For the good version, run `/handoff` *before* clearing. (At clear/exit ti
 running — only a shell hook — so a narrative handoff is impossible to generate then.)
 
 ### Claude Code — built in (default-on)
-The plugin ships these hooks in `hooks/hooks.json`, so the snapshot fires automatically:
+The plugin ships these hooks in `hooks/claude.json`, so the snapshot fires automatically:
 - **`SessionEnd`** → covers `/clear`, quit, and logout.
 - **`PreCompact`** → covers `/compact` and auto-compaction.
 
 No setup needed. (`Stop` is deliberately not wired — it fires every turn; `SessionEnd` already
 covers exit.)
 
-### Codex / Gemini — `./install.sh --autosave` (experimental)
-Their hook-event support is **unverified**, so this path is experimental and easy to undo (each
-merge backs up to `<config>.bak`). It wires:
-- **Codex** (`~/.codex/hooks.json`): `SessionEnd` + `PreCompact` → `core/handoff-snapshot.sh`.
-- **Gemini** (`~/.gemini/settings.json`): `AfterAgent` → `core/handoff-snapshot.sh`.
+### Codex / Gemini — autosave (experimental)
+Autosave fires from native plugin hooks where supported:
+- **Codex** (native plugin): `PreCompact` → `core/handoff-snapshot.sh`. (`SessionEnd` is not
+  available in Codex; `PreCompact` is the closest equivalent.)
+- **Gemini** (`~/.gemini/settings.json`, wired by `install.sh`): `AfterAgent` →
+  `core/handoff-snapshot.sh`.
+
+Both paths are experimental — confirm the events fire in your version before relying on them.
 
 When a snapshot exists and no manual handoff does, the next session shows:
 `🤝 Auto-snapshot available — read .handoff/AUTOSAVE.md if resuming`.
 
 ## Should I commit `.handoff/HANDOFF.md`?
 
-A project-level decision. The tool forces neither way.
+By default, no — and you don't need to decide immediately. The loader and snapshot both
+automatically append `.handoff/` to the project's `.gitignore` on first use, so the entire
+directory stays local unless you actively opt in.
 
-**Commit it** for cross-machine resume or team handoff. Best for solo private repos, pair/team
-workflows where the next person genuinely picks up your state, and repos with no
-secrets-in-errors risk.
+**To opt in:** remove `.handoff/` from `.gitignore` and commit the file. Good for solo private
+repos, pair/team workflows where the next person genuinely picks up your state, and repos with
+no secrets-in-errors risk. (The handoff captures errors verbatim — skip committing if that's a
+leak concern.)
 
-**Ignore it** if the repo is public/shared, if verbatim errors might capture credentials or
-internal hostnames/paths (the handoff captures errors verbatim by design), or if you'd rather
-not see handoff diffs in PRs.
-
-Regardless of choice, always ignore the archives and snapshots:
-```
-.handoff/archive-*.md
-.handoff/AUTOSAVE.md
-```
-
-### Cross-machine sync without committing (symlink recipe)
-
-```bash
-mkdir -p ~/Dropbox/handoffs/<repo-name>     # or iCloud / Drive / Syncthing path
-mkdir -p .handoff
-ln -s ~/Dropbox/handoffs/<repo-name>/HANDOFF.md .handoff/HANDOFF.md
-echo ".handoff/HANDOFF.md"     >> .gitignore
-echo ".handoff/archive-*.md"   >> .gitignore
-echo ".handoff/AUTOSAVE.md"    >> .gitignore
-```
-
-On a second machine, clone and re-create the symlink — the handoff appears automatically. The
-loader follows symlinks transparently.
+**Cross-machine sync without committing** — symlink the file into a cloud-synced folder and
+keep `.handoff/` gitignored. The loader follows symlinks transparently.
 
 ### If you do commit it
 
-- Always `.gitignore` the archives and `AUTOSAVE.md` (they accumulate fast, useless in history).
+- Keep `.handoff/archive-*.md` and `.handoff/AUTOSAVE.md` gitignored (they accumulate fast).
 - Treat handoff edits as fixup commits — squash before merging feature branches.
 - Consider `git-crypt` on `.handoff/HANDOFF.md` if errors-with-paths is a leak concern.
 
 ## Uninstall
 
-- **Claude Code:** `/plugin uninstall handoff`.
-- **Codex:** remove `~/.codex/prompts/handoff.md` and the `SessionStart` entry from
-  `~/.codex/hooks.json`.
-- **Gemini:** remove `~/.gemini/commands/handoff.toml` and the `SessionStart` entry from the
-  `hooks` object in `~/.gemini/settings.json` (a `.bak` from install is alongside it).
+- **Claude Code:** `/plugin uninstall handoff@claude-toolkit`
+- **Codex:** remove **handoff** in the Codex plugin UI (or see `codex plugin --help`)
+- **Gemini:** remove `~/.gemini/commands/handoff.toml` and the handoff `SessionStart` entry from
+  `~/.gemini/settings.json` (a `.bak` from install is alongside it).
 
-Existing `.handoff/` files in your projects are left untouched — delete manually if desired.
+Per-project `.handoff/` files are left untouched — delete manually if desired.
 
 ## Development
 
@@ -225,15 +201,29 @@ Tests are dependency-light bash (require `jq`):
 bash tests/run.sh
 ```
 
-`core/handoff.md` is the single source of truth for the command body. Claude Code and Codex
-loaders don't follow symlinks in their plugin/prompt caches, so `commands/handoff.md` and
-`adapters/codex/prompts/handoff.md` are **copies**. `tests/cmd_sync_test.sh` fails if a copy
-drifts — after editing `core/handoff.md`, re-copy it over both:
+`core/handoff.md` is the single source of truth for the command body. Claude Code's loader
+doesn't follow symlinks in its plugin cache, so `commands/handoff.md` is a **copy**.
+`tests/cmd_sync_test.sh` fails if it drifts — after editing `core/handoff.md`, re-copy it:
 
 ```
 cp core/handoff.md commands/handoff.md
-cp core/handoff.md adapters/codex/prompts/handoff.md
 ```
+
+## Releasing
+
+`main` is the dev tree — docs, tests, and all source live here. The installable plugin is
+the generated `release` branch, which contains only the runtime files users need on disk.
+
+To cut a release:
+
+```bash
+bash scripts/build-release.sh   # builds the release branch from an allowlist
+# review the printed worktree diff, then:
+git push origin release
+```
+
+The marketplace installers (`/plugin marketplace add kschuster1/handoff --ref release` for
+Codex; the Claude marketplace resolves `release` automatically) pull from that branch.
 
 ## License
 

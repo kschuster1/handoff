@@ -1,0 +1,11 @@
+{
+  "name": "handoff",
+  "plugins": [
+    {
+      "name": "handoff",
+      "source": { "source": "local", "path": "./plugins/handoff" },
+      "category": "Productivity",
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }
+    }
+  ]
+}

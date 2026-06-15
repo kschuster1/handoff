@@ -8,8 +8,8 @@ set -e
 # Logs ONE line every time this script is entered, BEFORE any gate/exit, so
 # "hook fired and self-gated" is distinguishable from "hook never fired".
 # Enable with HANDOFF_DEBUG=1; silent otherwise. Never affects normal behavior.
-[ -n "$HANDOFF_DEBUG" ] && printf '%s entered (arg=%s tty=%s)\n' \
-  "$(date -u +%FT%TZ)" "${1:-none}" "$([ -t 0 ] && echo yes || echo no)" \
+[ -n "$HANDOFF_DEBUG" ] && printf '%s entered (event=%s arg=%s tty=%s)\n' \
+  "$(date -u +%FT%TZ)" "${HANDOFF_EVENT:-none}" "${1:-none}" "$([ -t 0 ] && echo yes || echo no)" \
   >> "${TMPDIR:-/tmp}/handoff-snapshot.log" 2>/dev/null || true
 
 # ── resolve cwd: positional $1 → stdin JSON .cwd → $GEMINI_CWD → $PWD ──
@@ -54,8 +54,8 @@ mkdir -p "$HDIR"
 # keep the mechanical breadcrumb out of git so it never shows up uninvited in
 # `git status` / PR diffs (idempotent; only touches the repo-root .gitignore).
 GI="$CWD/.gitignore"
-if ! { [ -f "$GI" ] && grep -qxF '.handoff/AUTOSAVE.md' "$GI"; }; then
-  printf '.handoff/AUTOSAVE.md\n' >> "$GI"
+if ! { [ -f "$GI" ] && grep -qxF '.handoff/' "$GI"; }; then
+  printf '.handoff/\n' >> "$GI"
 fi
 
 {
