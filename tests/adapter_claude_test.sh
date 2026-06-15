@@ -15,7 +15,8 @@ echo "$mp" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "marketplace.json is valid
 assert_contains "$mp" "handoff" "marketplace lists handoff"
 # Claude Code schema requires an owner OBJECT (not string)
 assert_json_field "$mp" '.owner | type' "object" "marketplace owner is an object (CC schema)"
-assert_json_field "$mp" '.plugins[0].source' "./" "plugin source points at repo root"
+assert_json_field "$mp" '.plugins[0].source.source' "github" "plugin source type is github"
+assert_json_field "$mp" '.plugins[0].source.ref' "release" "plugin source pinned to release branch"
 
 # claude.json: events nested under a top-level `hooks` object (CC schema), claude arg, plugin root
 hj=$(cat "$ROOT/hooks/claude.json")

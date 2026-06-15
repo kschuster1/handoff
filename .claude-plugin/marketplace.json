@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "handoff",
-      "source": "./",
+      "source": { "source": "github", "repo": "kschuster1/handoff", "ref": "release" },
       "description": "Cross-harness context handoff (Claude Code, Codex, Gemini)."
     }
   ]
