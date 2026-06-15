@@ -15,12 +15,9 @@ assert_json_field "$out" '.hookSpecificOutput.hookEventName' "SessionStart" "gem
 ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
 assert_contains "$ctx" "∅ No handoff available" "gemini: no-handoff inside additionalContext"
 
-# --- codex mode also emits the structured envelope (verified live: Codex injects
-#     additionalContext silently instead of echoing the raw block to the user) ---
+# --- codex mode: terse output (Codex echoes injected context verbatim, so no handoff = silent) ---
 out=$(printf '{"cwd":"%s"}' "$TMP" | bash "$LOADER" codex)
-assert_json_field "$out" '.hookSpecificOutput.hookEventName' "SessionStart" "codex: hookEventName"
-cctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
-assert_contains "$cctx" "∅ No handoff available" "codex: no-handoff inside additionalContext"
+assert_eq "$(printf '%s' "$out" | tr -d '[:space:]')" "" "codex: no handoff → nothing injected"
 
 # ---------- handoff present ----------
 mkfix() { # dir summary resume body  -> writes .handoff/HANDOFF.md
@@ -34,6 +31,14 @@ mkfix "$D1" "wiring loader" "finish task 3" "## Task\nbuild loader"
 out=$(printf '{"cwd":"%s"}' "$D1" | bash "$LOADER" claude)
 assert_contains "$out" "HANDOFF.md (auto-loaded" "fresh small → full inject header"
 assert_contains "$out" "build loader" "full inject includes body text"
+
+# codex with handoff → terse 2-line marker, NO full-file dump, NO instruction block
+cout=$(printf '{"cwd":"%s"}' "$D1" | bash "$LOADER" codex)
+assert_contains "$cout" "🤝 Saved handoff" "codex: terse handoff marker"
+assert_contains "$cout" "wiring loader" "codex: summary in terse line"
+assert_contains "$cout" "finish task 3" "codex: resume in terse line"
+assert_not_contains "$cout" "handoff-loader-instruction" "codex: no verbose instruction block"
+assert_not_contains "$cout" "build loader" "codex: no full-file body dump"
 assert_contains "$out" "🤝 Handoff ingested" "full: confirmation line"
 assert_contains "$out" "Next up: finish task 3" "full: resume preview from frontmatter"
 assert_contains "$out" "Resume that, or do something else?" "full: resume question text"

@@ -1,6 +1,6 @@
 {
   "name": "handoff",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Cross-harness per-project context handoff: write .handoff/HANDOFF.md when pausing, auto-load on session start so the next session (in any supported harness) resumes cleanly.",
   "author": { "name": "Keith Schuster", "email": "keithschuster@gmail.com" },
   "license": "MIT",

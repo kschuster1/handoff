@@ -53,17 +53,16 @@ migrate_legacy_handoff "$CWD"
 set -e
 
 # ── emit(): format the body for the active harness ───────────
-# Gemini and Codex consume the structured SessionStart hook output (hookSpecificOutput.
-# additionalContext) — Codex injects it as context WITHOUT echoing the raw block to the user.
-# Claude takes raw stdout as additionalContext (and renders it cleanly itself).
+# Gemini requires a structured JSON envelope. Claude and Codex take raw stdout as the
+# SessionStart context. Codex ECHOES that context to the user verbatim (a transparency
+# feature — there is no silent-inject), so the Codex body is deliberately terse (see
+# codex_body); the JSON envelope only made the visible block longer, so it is not used here.
 emit() {
   local body; body=$(cat)
-  if [ "$HARNESS" = "gemini" ] || [ "$HARNESS" = "codex" ]; then
+  if [ "$HARNESS" = "gemini" ]; then
     if ! command -v jq >/dev/null 2>&1; then
-      # Fallback: without jq we can't build the envelope. Codex can still take raw stdout
-      # (verbose but functional); Gemini gets nothing rather than malformed context.
-      [ "$HARNESS" = "codex" ] && printf '%s\n' "$body"
-      return 0
+      printf 'handoff-loader: jq is required for gemini mode\n' >&2
+      return 0   # emit nothing → Gemini gets no malformed context
     fi
     jq -n --arg c "$body" \
       '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}}'
@@ -204,4 +203,21 @@ build_body() {
   resume_flow_instruction "$confirm" "$resume_display"
 }
 
-build_body | emit
+# ── codex_body(): terse output ───────────────────────────────
+# Codex echoes the injected SessionStart context to the user verbatim, so keep it to ~2 lines.
+# No full-file dump, no long instruction block — the model reads .handoff/HANDOFF.md if resuming.
+codex_body() {
+  if [ ! -f "$HANDOFF" ]; then
+    [ -f "$AUTOSAVE" ] && printf '🤝 Auto-snapshot exists (.handoff/AUTOSAVE.md) — read it if resuming prior work.\n'
+    return 0
+  fi
+  local fm summary resume
+  fm=$(awk '/^---$/{c++; next} c==1{print} c>=2{exit}' "$HANDOFF")
+  summary=$(printf '%s\n' "$fm" | grep -E '^summary:' | head -1 | sed 's/^summary: *//')
+  resume=$(printf '%s\n' "$fm"  | grep -E '^resume:'  | head -1 | sed 's/^resume: *//')
+  printf '🤝 Saved handoff for this project (.handoff/HANDOFF.md) — Summary: %s | Resume: %s\n' \
+    "${summary:-—}" "${resume:-see Next section}"
+  printf 'If the user opens with a greeting or "resume"/"continue"/"where were we", offer to resume that; otherwise just proceed. Read the file for full detail.\n'
+}
+
+if [ "$HARNESS" = "codex" ]; then codex_body | emit; else build_body | emit; fi
