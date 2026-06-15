@@ -680,6 +680,201 @@ Update `~/.claude/projects/-Volumes-DevDisk-projects-handoff/memory/handoff-tool
 
 ---
 
+### Task 11: Ignore the whole `.handoff/` directory
+
+**Files:**
+- Modify: `core/handoff-snapshot.sh` (gitignore line `.handoff/AUTOSAVE.md` → `.handoff/`)
+- Modify: `core/handoff.md` (WRITE flow: add a gitignore-ensure step)
+- Test: `tests/snapshot_test.sh` (update the existing gitignore assertion)
+
+- [ ] **Step 1: Update the failing assertion in `tests/snapshot_test.sh`**
+
+Find its current `.handoff/AUTOSAVE.md` gitignore assertion and change the expected line to `.handoff/`:
+
+```bash
+assert_contains "$(cat "$repo/.gitignore" 2>/dev/null)" ".handoff/" "snapshot ignores whole .handoff/ dir"
+```
+
+(Keep the "not duplicated on second snapshot" assertion; just update the matched string to `.handoff/`.)
+
+- [ ] **Step 2: Run the test, verify it fails**
+
+Run: `bash tests/snapshot_test.sh`
+Expected: the gitignore assertion FAILs (script still writes `.handoff/AUTOSAVE.md`).
+
+- [ ] **Step 3: Update `core/handoff-snapshot.sh`**
+
+Replace the existing gitignore block:
+
+```bash
+GI="$CWD/.gitignore"
+if ! { [ -f "$GI" ] && grep -qxF '.handoff/AUTOSAVE.md' "$GI"; }; then
+  printf '.handoff/AUTOSAVE.md\n' >> "$GI"
+```
+
+with:
+
+```bash
+GI="$CWD/.gitignore"
+if ! { [ -f "$GI" ] && grep -qxF '.handoff/' "$GI"; }; then
+  printf '.handoff/\n' >> "$GI"
+```
+
+(Leave the closing `fi` and surrounding lines intact.)
+
+- [ ] **Step 4: Add a gitignore-ensure step to `core/handoff.md` WRITE flow**
+
+In the WRITE flow, before "### 6. Final confirm + write", add a numbered step:
+
+```markdown
+### 5b. Ensure `.handoff/` is gitignored
+Before writing, make sure the project `.gitignore` contains a `.handoff/` line (add it if
+absent — idempotent). Handoff files are local-by-default and should not be committed.
+```
+
+Then re-sync the command copies (Task 1 of cmd_sync applies): `cp core/handoff.md commands/handoff.md`.
+
+- [ ] **Step 5: Run the suite, verify green**
+
+Run: `bash tests/run.sh`
+Expected: `snapshot_test.sh` and `cmd_sync_test.sh` pass; `0 failed` overall.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add core/handoff-snapshot.sh core/handoff.md commands/handoff.md tests/snapshot_test.sh
+git commit -m "feat(gitignore): ignore the whole .handoff/ dir, not just AUTOSAVE.md"
+```
+
+---
+
+### Task 12: Silent one-time legacy migration in the loader
+
+**Files:**
+- Modify: `core/handoff-loader.sh` (add migration helpers + call site)
+- Test: `tests/migrate_test.sh`
+
+Migrates a legacy `./.ai/HANDOFF.md` or `./.claude/HANDOFF.md` into `./.handoff/HANDOFF.md`.
+One-time (won't fire once `.handoff/HANDOFF.md` exists), reversible (legacy → `.bak`, memory
+files backed up), and crash-proof (errexit disabled around the call so guards work).
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/migrate_test.sh`:
+
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib.sh"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+run_loader() { # project_dir
+  printf '{"cwd":"%s"}' "$1" | bash "$ROOT/core/handoff-loader.sh" claude >/dev/null 2>&1 || true
+}
+
+# --- migrates .ai/HANDOFF.md, strips stale CLAUDE.md ref, ignores .handoff/ ---
+p=$(mktemp -d)
+mkdir -p "$p/.ai"
+printf -- '---\nsummary: legacy\nresume: do x\n---\n# Handoff\nold\n' > "$p/.ai/HANDOFF.md"
+printf 'project notes\n<!-- handoff-pointer --> read .ai/HANDOFF.md first\nkeep me\n' > "$p/CLAUDE.md"
+run_loader "$p"
+assert_eq "$([ -f "$p/.handoff/HANDOFF.md" ] && echo y || echo n)" "y" "migrated to .handoff/HANDOFF.md"
+assert_contains "$(cat "$p/.handoff/HANDOFF.md")" "summary: legacy" "migrated content preserved"
+assert_eq "$([ -f "$p/.ai/HANDOFF.md.bak" ] && echo y || echo n)" "y" "legacy renamed to .bak"
+assert_eq "$([ -f "$p/.ai/HANDOFF.md" ] && echo y || echo n)" "n" "legacy original removed"
+assert_contains "$(cat "$p/.gitignore")" ".handoff/" ".handoff/ gitignored"
+assert_not_contains "$(cat "$p/CLAUDE.md")" "handoff-pointer" "stale pointer line stripped"
+assert_contains "$(cat "$p/CLAUDE.md")" "keep me" "non-handoff CLAUDE.md lines preserved"
+assert_eq "$([ -f "$p/CLAUDE.md.bak" ] && echo y || echo n)" "y" "CLAUDE.md backed up before edit"
+rm -rf "$p"
+
+# --- does NOT fire when a current handoff already exists ---
+q=$(mktemp -d)
+mkdir -p "$q/.ai" "$q/.handoff"
+printf 'legacy\n' > "$q/.ai/HANDOFF.md"
+printf -- '---\nsummary: current\n---\n' > "$q/.handoff/HANDOFF.md"
+run_loader "$q"
+assert_contains "$(cat "$q/.handoff/HANDOFF.md")" "summary: current" "existing handoff untouched"
+assert_eq "$([ -f "$q/.ai/HANDOFF.md.bak" ] && echo y || echo n)" "n" "no migration when current handoff exists"
+rm -rf "$q"
+
+# --- prefers .ai over .claude; .claude path also works ---
+r=$(mktemp -d)
+mkdir -p "$r/.claude"
+printf 'claudelegacy\n' > "$r/.claude/HANDOFF.md"
+run_loader "$r"
+assert_eq "$([ -f "$r/.handoff/HANDOFF.md" ] && echo y || echo n)" "y" ".claude/HANDOFF.md migrates too"
+rm -rf "$r"
+finish
+```
+
+- [ ] **Step 2: Run the test, verify it fails**
+
+Run: `bash tests/migrate_test.sh`
+Expected: FAILs (loader has no migration yet).
+
+- [ ] **Step 3: Add migration helpers to `core/handoff-loader.sh`**
+
+Insert after the `AUTOSAVE="$HDIR/AUTOSAVE.md"` line (after line 22), before the `emit()` function:
+
+```bash
+# ── one-time, silent, reversible legacy migration ────────────
+ensure_handoff_gitignore() { # project_root
+  local gi="$1/.gitignore"
+  { [ -f "$gi" ] && grep -qxF '.handoff/' "$gi"; } || printf '.handoff/\n' >> "$gi" 2>/dev/null || true
+}
+strip_handoff_refs() { # memory_file
+  local f="$1"
+  [ -f "$f" ] || return 0
+  grep -qE '\.ai/HANDOFF\.md|\.claude/HANDOFF\.md|handoff-pointer' "$f" 2>/dev/null || return 0
+  cp "$f" "$f.bak" 2>/dev/null || return 0
+  grep -vE '\.ai/HANDOFF\.md|\.claude/HANDOFF\.md|handoff-pointer' "$f.bak" > "$f" 2>/dev/null || cp "$f.bak" "$f" 2>/dev/null
+}
+migrate_legacy_handoff() { # project_root
+  local root="$1" legacy="" cand
+  [ -f "$root/.handoff/HANDOFF.md" ] && return 0
+  for cand in "$root/.ai/HANDOFF.md" "$root/.claude/HANDOFF.md"; do
+    [ -f "$cand" ] && { legacy="$cand"; break; }
+  done
+  [ -z "$legacy" ] && return 0
+  mkdir -p "$root/.handoff" 2>/dev/null || return 0
+  cp "$legacy" "$root/.handoff/HANDOFF.md" 2>/dev/null || return 0
+  mv "$legacy" "$legacy.bak" 2>/dev/null || true
+  ensure_handoff_gitignore "$root"
+  strip_handoff_refs "$root/CLAUDE.md"
+  strip_handoff_refs "$root/AGENTS.md"
+}
+```
+
+- [ ] **Step 4: Add the call site (errexit-safe)**
+
+Immediately after the helper definitions (still before `emit()`), add:
+
+```bash
+# Run migration with errexit OFF so the internal `[ -f ] && ...` guards can't abort the loader.
+set +e
+migrate_legacy_handoff "$CWD"
+set -e
+```
+
+- [ ] **Step 5: Run the test, verify it passes**
+
+Run: `bash tests/migrate_test.sh`
+Expected: all `ok:`, `0 failed`.
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `bash tests/run.sh`
+Expected: `0 failed` overall (migration must not disturb existing loader tests).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add core/handoff-loader.sh tests/migrate_test.sh
+git commit -m "feat(loader): silent one-time reversible legacy handoff migration"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage:**
@@ -690,6 +885,8 @@ Update `~/.claude/projects/-Volumes-DevDisk-projects-handoff/memory/handoff-tool
 - Tests (codex manifest, dual-manifest, no default hooks.json, build allowlist; retire codex install tests) → Tasks 1,2,3,7,6,8. ✓
 - README → Task 9. ✓
 - Memory correction → Task 10. ✓
+- Ignore whole `.handoff/` dir (spec §7a) → Task 11. ✓
+- Silent one-time reversible legacy migration, `.ai/`+`.claude/`, strip stale memory refs (spec §7b) → Task 12. ✓
 
 **Placeholder scan:** Task 5's test wiring and Task 9's Codex-remove command are the only soft spots; both are flagged to mirror existing patterns / avoid inventing flags rather than left as "TODO". No bare TODO/TBD remain.
 

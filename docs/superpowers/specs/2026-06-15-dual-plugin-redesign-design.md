@@ -137,6 +137,38 @@ Rewrite the install section: Claude marketplace + Codex marketplace as parallel 
 paths; Gemini via `install.sh`. Update the capability table. Document native uninstall on both.
 Document the `release` branch + `build-release.sh` for maintainers.
 
+### 7. Per-project behaviour: gitignore + one-time legacy migration
+
+The plugin installs once globally (user-level `~/.codex/plugins/`, `~/.claude/plugins/`) and its
+hooks fire in **every** project. The `.handoff/` data is per-project. Two per-project behaviours:
+
+**7a. Ignore the whole `.handoff/` directory.** Wherever handoff writes into a project, ensure
+the project `.gitignore` contains a `.handoff/` line (idempotent — added only if absent). This
+supersedes the current AUTOSAVE-only ignore. Three entry points must guarantee it:
+- `core/handoff-snapshot.sh` — change its existing `.handoff/AUTOSAVE.md` gitignore line to `.handoff/`.
+- `core/handoff-loader.sh` — the migration path (7b) adds it.
+- `core/handoff.md` WRITE flow — add a step that ensures `.handoff/` is ignored before writing.
+
+**7b. Silent, one-time, reversible legacy migration (in the loader).** On `SessionStart`,
+`core/handoff-loader.sh` migrates a legacy handoff into the new location. Chosen explicitly as
+*silent* (no prompt), so it is constrained to be safe:
+
+- **Trigger guard:** runs only if `./.handoff/HANDOFF.md` does **not** exist AND a legacy file
+  does — `./.ai/HANDOFF.md` or `./.claude/HANDOFF.md` (first match wins). Once `.handoff/HANDOFF.md`
+  exists, it can never fire again → strictly one-time.
+- **Non-destructive:** `cp` legacy → `./.handoff/HANDOFF.md`, then `mv` legacy → `<legacy>.bak`
+  (rename, never delete — fully reversible).
+- **Gitignore:** ensure `.handoff/` in the project `.gitignore` (7a helper).
+- **Strip stale memory refs:** in `./CLAUDE.md` and `./AGENTS.md`, back up to `<file>.bak` then
+  remove lines referencing a legacy handoff path (`.ai/HANDOFF.md`, `.claude/HANDOFF.md`) or the
+  `<!-- handoff-pointer -->` marker. The new model auto-loads via the SessionStart hook, so no
+  memory-file pointer is needed — stale lines are removed, not rewritten.
+- **Crash-proof:** every step guarded; the function always returns 0. A migration failure must
+  never block session start or the normal injection that follows. Honour the 5s hook timeout —
+  the work is a few file ops, well within budget.
+
+The migrated `.handoff/HANDOFF.md` then flows through the normal loader injection unchanged.
+
 ## Out of scope
 
 - Publishing to the public Codex Plugin Marketplace review queue (the `marketplace add owner/repo`
