@@ -15,6 +15,13 @@ assert_json_field "$out" '.hookSpecificOutput.hookEventName' "SessionStart" "gem
 ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
 assert_contains "$ctx" "∅ No handoff available" "gemini: no-handoff inside additionalContext"
 
+# --- codex mode also emits the structured envelope (verified live: Codex injects
+#     additionalContext silently instead of echoing the raw block to the user) ---
+out=$(printf '{"cwd":"%s"}' "$TMP" | bash "$LOADER" codex)
+assert_json_field "$out" '.hookSpecificOutput.hookEventName' "SessionStart" "codex: hookEventName"
+cctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
+assert_contains "$cctx" "∅ No handoff available" "codex: no-handoff inside additionalContext"
+
 # ---------- handoff present ----------
 mkfix() { # dir summary resume body  -> writes .handoff/HANDOFF.md
   mkdir -p "$1/.handoff"

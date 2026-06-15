@@ -53,12 +53,17 @@ migrate_legacy_handoff "$CWD"
 set -e
 
 # ── emit(): format the body for the active harness ───────────
+# Gemini and Codex consume the structured SessionStart hook output (hookSpecificOutput.
+# additionalContext) — Codex injects it as context WITHOUT echoing the raw block to the user.
+# Claude takes raw stdout as additionalContext (and renders it cleanly itself).
 emit() {
   local body; body=$(cat)
-  if [ "$HARNESS" = "gemini" ]; then
+  if [ "$HARNESS" = "gemini" ] || [ "$HARNESS" = "codex" ]; then
     if ! command -v jq >/dev/null 2>&1; then
-      printf 'handoff-loader: jq is required for gemini mode\n' >&2
-      return 0   # emit nothing → Gemini gets no malformed context
+      # Fallback: without jq we can't build the envelope. Codex can still take raw stdout
+      # (verbose but functional); Gemini gets nothing rather than malformed context.
+      [ "$HARNESS" = "codex" ] && printf '%s\n' "$body"
+      return 0
     fi
     jq -n --arg c "$body" \
       '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$c}}'
