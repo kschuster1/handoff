@@ -85,7 +85,7 @@ if want claude && [ -d "$HOME_DIR/.claude" ]; then
 fi
 
 # ── Optional: autosave hooks (mechanical snapshot on clear/compact) ──
-# Claude Code gets these built into the plugin's hooks.json (SessionEnd + PreCompact), so
+# Claude Code gets these built into the plugin's hooks/claude.json (SessionEnd + PreCompact), so
 # nothing to do there. Codex gets them via the native plugin (hooks/codex.json). Gemini's
 # AfterAgent event support is still UNVERIFIED, so the Gemini path remains EXPERIMENTAL
 # (safe to remove via the .bak backup).

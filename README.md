@@ -23,7 +23,7 @@ JSON envelope).
 | Harness     | `/handoff` command | Auto-load (`SessionStart` hook) | Install      | Verified                      |
 |-------------|--------------------|---------------------------------|--------------|-------------------------------|
 | Claude Code | ✅ plugin command   | ✅                              | marketplace  | runnable where you read this  |
-| Codex CLI   | ✅ prompt           | ✅ `~/.codex/hooks.json`        | marketplace  | live session smoke-test on first use¹ |
+| Codex CLI   | ✅ plugin command   | ✅                              | marketplace  | live session smoke-test on first use¹ |
 | Gemini CLI  | ✅ TOML command     | ✅ `~/.gemini/settings.json`    | `install.sh` | live session smoke-test on first use¹ |
 
 ¹ Session-start hook wiring is built to each tool's official hook spec and exercised by the
