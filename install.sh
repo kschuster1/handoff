@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # install.sh — wire the handoff tool into detected harnesses.
+# Codex now installs as a native plugin via its own marketplace + .codex-plugin/plugin.json +
+# hooks/codex.json; this script handles Gemini + Claude manual-fallback guidance only.
 # Flags: --yes (no prompts), --autosave (add snapshot hooks), --pointer (add memory-file note),
-#        --harness <claude|codex|gemini> (limit scope; repeatable).
+#        --harness <claude|gemini> (limit scope; repeatable).
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -35,12 +37,11 @@ render() {
 log() { printf '  %s\n' "$1"; }
 
 # Merge every event in a template's top-level `hooks` object into a (possibly pre-existing)
-# config WITHOUT clobbering the user's other hooks/settings. All three harnesses nest events
-# under a top-level `hooks` object (Claude/Codex hooks.json, Gemini settings.json). For each
-# event the template defines, we drop existing handoff-owned entries (serialized-entry contains
-# `core/handoff-`, matching both the loader and the snapshot script) and append ours — so the
-# merge is idempotent and only ever touches handoff's own entries. Works for both Claude/Codex-
-# nested entries ({hooks:[{command}]}) and Gemini-flat entries ({command}). Backs up to .bak.
+# config WITHOUT clobbering the user's other hooks/settings. For each event the template defines,
+# we drop existing handoff-owned entries (serialized-entry contains `core/handoff-`, matching
+# both the loader and the snapshot script) and append ours — so the merge is idempotent and only
+# ever touches handoff's own entries. Works for both Claude-nested entries ({hooks:[{command}]})
+# and Gemini-flat entries ({command}). Backs up to .bak.
 merge_hooks() { # template_path dest_path
   local tmpl="$1" dest="$2" rendered rtmp
   rendered=$(render "$tmpl")
@@ -65,15 +66,6 @@ merge_hooks() { # template_path dest_path
   fi
 }
 
-# ── Codex ────────────────────────────────────────────────────
-if want codex && [ -d "$HOME_DIR/.codex" ]; then
-  echo "Codex detected → $HOME_DIR/.codex"
-  mkdir -p "$HOME_DIR/.codex/prompts"
-  cp "$ROOT/core/handoff.md" "$HOME_DIR/.codex/prompts/handoff.md"
-  merge_hooks "$ROOT/adapters/codex/hooks.json" "$HOME_DIR/.codex/hooks.json"
-  log "prompt + SessionStart hook installed"
-fi
-
 # ── Gemini ───────────────────────────────────────────────────
 if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
   echo "Gemini detected → $HOME_DIR/.gemini"
@@ -94,15 +86,11 @@ fi
 
 # ── Optional: autosave hooks (mechanical snapshot on clear/compact) ──
 # Claude Code gets these built into the plugin's hooks.json (SessionEnd + PreCompact), so
-# nothing to do there. Codex is VERIFIED — it fires both SessionEnd and PreCompact and the
-# snapshot regenerates correctly. Gemini's AfterAgent event support is still UNVERIFIED, so
-# the Gemini path remains EXPERIMENTAL (safe to remove via the .bak backup).
+# nothing to do there. Codex gets them via the native plugin (hooks/codex.json). Gemini's
+# AfterAgent event support is still UNVERIFIED, so the Gemini path remains EXPERIMENTAL
+# (safe to remove via the .bak backup).
 if [ "$AUTOSAVE" -eq 1 ]; then
-  echo "Autosave snapshot hooks (Claude Code: built into the plugin):"
-  if want codex && [ -d "$HOME_DIR/.codex" ]; then
-    merge_hooks "$ROOT/adapters/codex/hooks-autosave.json" "$HOME_DIR/.codex/hooks.json"
-    log "codex: snapshot hooks (SessionEnd + PreCompact) wired [verified]"
-  fi
+  echo "Autosave snapshot hooks (Claude Code + Codex: built into their plugins):"
   if want gemini && [ -d "$HOME_DIR/.gemini" ]; then
     log "EXPERIMENTAL for Gemini — AfterAgent event support is unverified; safe to remove via the .bak backup."
     merge_hooks "$ROOT/adapters/gemini/settings-autosave.json" "$HOME_DIR/.gemini/settings.json"
