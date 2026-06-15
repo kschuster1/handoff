@@ -53,9 +53,18 @@ assert_eq "$([ -f "$R5/.handoff/AUTOSAVE.md" ] && echo yes || echo no)" "yes" "s
 
 # breadcrumb is gitignored, idempotently (never shows up in git status)
 gi=$(cat "$R5/.gitignore" 2>/dev/null || echo "")
-assert_contains "$gi" ".handoff/AUTOSAVE.md" "AUTOSAVE.md added to .gitignore"
+assert_contains "$gi" ".handoff/" ".handoff/ dir added to .gitignore"
 bash "$SNAP" "$R5"   # second run must not duplicate the gitignore line
-cnt=$(grep -cxF '.handoff/AUTOSAVE.md' "$R5/.gitignore" 2>/dev/null || echo 0)
+cnt=$(grep -cxF '.handoff/' "$R5/.gitignore" 2>/dev/null || echo 0)
 assert_eq "$cnt" "1" "gitignore entry not duplicated on second snapshot"
+
+# breadcrumb logs HANDOFF_EVENT name
+R6=$(newrepo)
+( cd "$R6" && echo change >> a.txt )
+LOG="${TMPDIR:-/tmp}/handoff-snapshot.log"
+rm -f "$LOG"
+HANDOFF_DEBUG=1 HANDOFF_EVENT=PreCompact bash "$SNAP" "$R6"
+log_content=$(cat "$LOG" 2>/dev/null || echo "")
+assert_contains "$log_content" "event=PreCompact" "breadcrumb logs HANDOFF_EVENT name"
 
 finish
