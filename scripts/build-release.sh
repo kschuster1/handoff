@@ -6,13 +6,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
+# Repo-root files: the Claude plugin (installed from the repo root) + both marketplace
+# manifests + shared Gemini/manual assets.
 ALLOW=(
   .claude-plugin/plugin.json
   .claude-plugin/marketplace.json
-  .codex-plugin/plugin.json
   .agents/plugins/marketplace.json
   hooks/claude.json
-  hooks/codex.json
   core/handoff-loader.sh
   core/handoff-snapshot.sh
   core/handoff.md
@@ -23,12 +23,32 @@ ALLOW=(
   LICENSE
 )
 
+# The Codex plugin is a SELF-CONTAINED bundle under plugins/handoff/ (Codex resolves a plugin
+# from the marketplace `source.path` dir, which must hold its own .codex-plugin/ + hooks/ +
+# runtime — ${PLUGIN_ROOT} points at this dir). Mirrors OpenAI's own bundled-plugin layout.
+CODEX_BUNDLE=(
+  .codex-plugin/plugin.json
+  hooks/codex.json
+  core/handoff-loader.sh
+  core/handoff-snapshot.sh
+  core/handoff.md
+  commands/handoff.md
+)
+
 stage_into() { # dest_dir
   local dest="$1" item
   for item in "${ALLOW[@]}"; do
     if [ -e "$ROOT/$item" ]; then
       mkdir -p "$dest/$(dirname "$item")"
       cp -R "$ROOT/$item" "$dest/$(dirname "$item")/"
+    fi
+  done
+  # assemble the self-contained Codex plugin bundle
+  local cdest="$dest/plugins/handoff" b
+  for b in "${CODEX_BUNDLE[@]}"; do
+    if [ -e "$ROOT/$b" ]; then
+      mkdir -p "$cdest/$(dirname "$b")"
+      cp -R "$ROOT/$b" "$cdest/$(dirname "$b")/"
     fi
   done
   if [ -d "$dest/docs" ] || [ -d "$dest/tests" ]; then

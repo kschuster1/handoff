@@ -7,14 +7,28 @@ stage=$(mktemp -d)
 rc=$?
 assert_eq "$rc" "0" "build-release stage mode exits 0"
 
-# Required runtime files present
+# Repo-root files (Claude plugin + marketplaces + shared assets)
 for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json \
-         .codex-plugin/plugin.json .agents/plugins/marketplace.json \
-         hooks/claude.json hooks/codex.json \
+         .agents/plugins/marketplace.json \
+         hooks/claude.json \
          core/handoff-loader.sh core/handoff-snapshot.sh core/handoff.md \
          commands/handoff.md README.md LICENSE; do
   assert_eq "$([ -f "$stage/$f" ] && echo y || echo n)" "y" "release includes $f"
 done
+
+# Self-contained Codex plugin bundle under plugins/handoff/
+for f in plugins/handoff/.codex-plugin/plugin.json \
+         plugins/handoff/hooks/codex.json \
+         plugins/handoff/core/handoff-loader.sh \
+         plugins/handoff/core/handoff-snapshot.sh \
+         plugins/handoff/core/handoff.md \
+         plugins/handoff/commands/handoff.md; do
+  assert_eq "$([ -f "$stage/$f" ] && echo y || echo n)" "y" "codex bundle includes $f"
+done
+
+# Codex plugin manifest + codex hook file must NOT sit at the repo root (only in the bundle)
+assert_eq "$([ -f "$stage/.codex-plugin/plugin.json" ] && echo y || echo n)" "n" "no root .codex-plugin (bundle only)"
+assert_eq "$([ -f "$stage/hooks/codex.json" ] && echo y || echo n)" "n" "no root hooks/codex.json (bundle only)"
 
 # Dev-only files must NOT ship
 assert_eq "$([ -d "$stage/docs" ] && echo y || echo n)" "n" "release excludes docs/"

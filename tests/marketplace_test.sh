@@ -7,7 +7,7 @@ cm=$(cat "$ROOT/.agents/plugins/marketplace.json")
 echo "$cm" | jq . >/dev/null 2>&1; assert_eq "$?" "0" "codex marketplace.json valid JSON"
 assert_json_field "$cm" '.plugins[0].name' "handoff" "codex marketplace lists handoff"
 assert_json_field "$cm" '.plugins[0].source.source' "local" "codex marketplace source type local"
-assert_json_field "$cm" '.plugins[0].source.path' "./" "codex marketplace path points at repo root"
+assert_json_field "$cm" '.plugins[0].source.path' "./plugins/handoff" "codex marketplace path points at the plugin bundle dir"
 
 # --- Claude marketplace manifest points plugin at the release ref ---
 am=$(cat "$ROOT/.claude-plugin/marketplace.json")
