@@ -7,6 +7,15 @@ argument-hint: "[clear|status|list|help]"
 
 Subcommand argument received: **$ARGUMENTS**
 
+## Storage path — HARD RULE (do not override)
+
+The handoff file is **always** `./.handoff/HANDOFF.md` (a `.handoff/` directory in the project
+root). This is fixed and harness-neutral. **Never** write to or read from a harness-specific
+directory such as `.codex/`, `.claude/`, `.ai/`, or `.gemini/`, even when running inside that
+harness — do not "correct" the path to match the tool you are in. `.handoff/HANDOFF.md` is the
+one canonical location. (If a legacy `.codex/`, `.claude/`, or `.ai/HANDOFF.md` happens to
+exist, ignore it as the target — `./.handoff/HANDOFF.md` is canonical.)
+
 ## Interactive questions (harness-neutral)
 
 Whenever this command says "ask the user": if an interactive question tool

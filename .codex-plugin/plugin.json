@@ -1,5 +1,5 @@
 {
   "name": "handoff",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Cross-harness per-project context handoff: write .handoff/HANDOFF.md when pausing, auto-load on session start so the next session (in any supported harness) resumes cleanly."
 }
