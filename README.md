@@ -145,7 +145,7 @@ holds. For the good version, run `/handoff` *before* clearing. (At clear/exit ti
 running — only a shell hook — so a narrative handoff is impossible to generate then.)
 
 ### Claude Code — built in (default-on)
-The plugin ships these hooks in `hooks/hooks.json`, so the snapshot fires automatically:
+The plugin ships these hooks in `hooks/claude.json`, so the snapshot fires automatically:
 - **`SessionEnd`** → covers `/clear`, quit, and logout.
 - **`PreCompact`** → covers `/compact` and auto-compaction.
 
@@ -201,14 +201,12 @@ Tests are dependency-light bash (require `jq`):
 bash tests/run.sh
 ```
 
-`core/handoff.md` is the single source of truth for the command body. Claude Code and Codex
-loaders don't follow symlinks in their plugin/prompt caches, so `commands/handoff.md` and
-`adapters/codex/prompts/handoff.md` are **copies**. `tests/cmd_sync_test.sh` fails if a copy
-drifts — after editing `core/handoff.md`, re-copy it over both:
+`core/handoff.md` is the single source of truth for the command body. Claude Code's loader
+doesn't follow symlinks in its plugin cache, so `commands/handoff.md` is a **copy**.
+`tests/cmd_sync_test.sh` fails if it drifts — after editing `core/handoff.md`, re-copy it:
 
 ```
 cp core/handoff.md commands/handoff.md
-cp core/handoff.md adapters/codex/prompts/handoff.md
 ```
 
 ## Releasing
