@@ -16,10 +16,10 @@ for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json \
   assert_eq "$([ -f "$stage/$f" ] && echo y || echo n)" "y" "release includes $f"
 done
 
-# Self-contained Codex plugin bundle under plugins/handoff/ — hook is hooks.json at bundle ROOT
-# (Codex auto-discovers it), not a nested hooks/ dir.
+# Self-contained Codex plugin bundle under plugins/handoff/ — hook is auto-discovered at
+# hooks/hooks.json inside the bundle (verified live).
 for f in plugins/handoff/.codex-plugin/plugin.json \
-         plugins/handoff/hooks.json \
+         plugins/handoff/hooks/hooks.json \
          plugins/handoff/core/handoff-loader.sh \
          plugins/handoff/core/handoff-snapshot.sh \
          plugins/handoff/core/handoff.md \
@@ -30,7 +30,8 @@ done
 # Codex plugin manifest + codex hook file must NOT sit at the repo root (only in the bundle)
 assert_eq "$([ -f "$stage/.codex-plugin/plugin.json" ] && echo y || echo n)" "n" "no root .codex-plugin (bundle only)"
 assert_eq "$([ -f "$stage/hooks/codex.json" ] && echo y || echo n)" "n" "no root hooks/codex.json (bundle only)"
-# the bundle hook is named hooks.json (root), not nested
+# the bundle hook must be at hooks/hooks.json (Codex's auto-discovery name), not a root or custom name
+assert_eq "$([ -f "$stage/plugins/handoff/hooks.json" ] && echo y || echo n)" "n" "no root-level hooks.json in bundle (must be hooks/hooks.json)"
 assert_eq "$([ -f "$stage/plugins/handoff/hooks/codex.json" ] && echo y || echo n)" "n" "no nested hooks/codex.json in bundle"
 
 # Dev-only files must NOT ship

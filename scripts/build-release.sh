@@ -24,9 +24,10 @@ ALLOW=(
 )
 
 # The Codex plugin is a SELF-CONTAINED bundle under plugins/handoff/ (Codex resolves a plugin
-# from the marketplace `source.path` dir). Codex AUTO-DISCOVERS hooks from a `hooks.json` at the
-# plugin root — NOT a manifest-pointed custom path (verified live against OpenAI's own plugins),
-# so the dev-tree `hooks/codex.json` is staged as `plugins/handoff/hooks.json`.
+# from the marketplace `source.path` dir). Codex AUTO-DISCOVERS hooks from `hooks/hooks.json`
+# inside the bundle (verified live: the root `hooks.json` and a manifest-pointed path do NOT
+# register; `hooks/hooks.json` does). Hook commands run with cwd=PROJECT dir, so they use the
+# ${PLUGIN_ROOT} env var Codex provides. The dev-tree `hooks/codex.json` is staged there.
 CODEX_BUNDLE=(
   .codex-plugin/plugin.json
   core/handoff-loader.sh
@@ -51,8 +52,9 @@ stage_into() { # dest_dir
       cp -R "$ROOT/$b" "$cdest/$(dirname "$b")/"
     fi
   done
-  # Codex hook file lives at the bundle ROOT as hooks.json (auto-discovered)
-  cp "$ROOT/hooks/codex.json" "$cdest/hooks.json"
+  # Codex auto-discovers the hook at <bundle>/hooks/hooks.json
+  mkdir -p "$cdest/hooks"
+  cp "$ROOT/hooks/codex.json" "$cdest/hooks/hooks.json"
   if [ -d "$dest/docs" ] || [ -d "$dest/tests" ]; then
     echo "ERROR: dev-only files leaked into release stage" >&2
     return 1
