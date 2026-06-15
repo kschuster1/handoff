@@ -57,11 +57,27 @@ No handoff present → a single `∅ No handoff available` line, nothing else.
 
 ### Codex
 
+Run these **in your terminal** (not inside the Codex TUI):
+
 ```
 codex plugin marketplace add kschuster1/handoff --ref release
+codex plugin add handoff@handoff
 ```
 
-Then install **handoff** from the Codex plugin UI.
+Then start `codex` and **approve the one-time hook-trust prompt**. Auto-load fires on session
+start; `/handoff` is available as a slash command in-session (type `/` to find it).
+
+#### Updating (Codex)
+
+When a new version ships, run **in your terminal** (Codex not running), then restart Codex:
+
+```
+codex plugin marketplace upgrade handoff
+codex plugin remove handoff@handoff
+codex plugin add handoff@handoff
+```
+
+(The `remove`+`add` forces a clean refetch of the new version from the `release` branch.)
 
 ### Gemini (script)
 
@@ -108,7 +124,9 @@ harness actually fires the hook. 30-second smoke test per harness:
 2. Start a fresh session of the harness **in that directory**.
 3. Confirm the first response begins with a `🤝 Handoff …` line. If it doesn't:
    - **Claude Code:** check the plugin is enabled in `/plugin`.
-   - **Codex:** run `/hooks`; if the handoff hook isn't listed, enable `features.hooks` (above).
+   - **Codex:** approve the one-time **hook-trust prompt** when you start `codex` (untrusted
+     plugin hooks are silently skipped), and start a *fresh* interactive session — `codex exec`
+     does not fire plugin hooks. Re-run the update commands if you're not on the latest version.
    - **Gemini:** confirm the `SessionStart` block landed in `~/.gemini/settings.json` and that
      `bash ~/.gemini/... </dev/null` style invocation isn't blocked.
 
