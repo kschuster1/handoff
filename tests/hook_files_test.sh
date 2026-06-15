@@ -22,6 +22,7 @@ assert_not_contains "$xj" "CLAUDE_PLUGIN_ROOT" "codex.json does not use CLAUDE_P
 assert_json_field "$xj" '.hooks.SessionStart[0].hooks[0].type' "command" "codex SessionStart present"
 assert_json_field "$xj" '.hooks.PreCompact[0].hooks[0].type' "command" "codex PreCompact present"
 assert_eq "$(echo "$xj" | jq -r '.hooks | has("SessionEnd")')" "false" "codex.json has NO SessionEnd (not a Codex event)"
+assert_contains "$xj" "HANDOFF_EVENT=PreCompact" "codex PreCompact carries HANDOFF_EVENT"
 
 # Claude manifest points at the custom hooks file.
 pj=$(cat "$ROOT/.claude-plugin/plugin.json")

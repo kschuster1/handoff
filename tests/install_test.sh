@@ -55,8 +55,8 @@ assert_json_field "$gs" '.hooks.BeforeTool[0].command' "user-scan" "gemini merge
 assert_contains "$gs" "handoff-loader.sh" "gemini merge adds SessionStart handoff hook"
 assert_eq "$([ -f "$FH3/.gemini/settings.json.bak" ] && echo yes || echo no)" "yes" "gemini settings.json backed up"
 
-# ── shipped Claude plugin hooks.json: clear + compact snapshot wired, loader intact ──
-ch=$(cat "$ROOT/hooks/hooks.json")
+# ── shipped Claude plugin claude.json: clear + compact snapshot wired, loader intact ──
+ch=$(cat "$ROOT/hooks/claude.json")
 assert_json_field "$ch" '.hooks.SessionEnd[0].hooks[0].command | contains("handoff-snapshot.sh")' "true" "claude plugin: SessionEnd snapshot present (covers /clear)"
 assert_json_field "$ch" '.hooks.PreCompact[0].hooks[0].command | contains("handoff-snapshot.sh")' "true" "claude plugin: PreCompact snapshot present (covers /compact)"
 assert_json_field "$ch" '.hooks.SessionStart[0].hooks[0].command | contains("handoff-loader.sh")' "true" "claude plugin: SessionStart loader intact"
